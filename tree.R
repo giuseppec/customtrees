@@ -5,60 +5,24 @@ q = quantile(x, seq(0, 1, length.out = 100), type = 1)
 y = 4 + 2 * cos(x) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 plot(x,y)
 
-# objective for CART
-SS = function(x, y) {
-  ypred = mean(y)
-  sum((y - ypred)^2)
-}
-
-# objective for mob
-SS_mod <- function(x, y){
-  ypred = predict(lm(y ~ x))
-  sum((y - ypred)^2)
-}
-
-# Split function
-# treesplit = function(x, y, objective) {
-#   UseMethod("treesplit")
-# }
-
-# input: x feature values, y target, min.node.size, n.split.points
-optFun = function(split.point, x, y, min.node.size = 10, objective = SS) {
-  split.factor = findInterval(x, split.point, rightmost.closed = TRUE)
-  node.size = table(split.factor)
-
-  if (any(node.size < min.node.size))
-    return(Inf)
-
-  d = data.table(x, y, split.factor)
-  sum(d[, .(obj = objective(x, y)), by = split.factor]$obj)
-}
 
 
-optFun2 = function(split.point, x, y, min.node.size = 10, objective = SS_mod) {
-  split.point = sort(split.point)
-  split.factor = findInterval(x, split.point, rightmost.closed = TRUE)
-  node.size = table(split.factor)
+library(devtools)
+load_all()
 
-  if (any(node.size < min.node.size))
-    return(Inf)
 
-  y.list = split(y, split.factor)
-  x.list = split(x, split.factor)
 
-  res = vnapply(1:length(y.list), fun = function(i) {
-    objective(x = x.list[[i]], y = y.list[[i]])
-  })
+split_optimizer(x, y, objective = SS)
 
-  sum(res)
-}
-GenSA(rep(0, 3), fn = optFun2, lower = rep(min(x), 3), upper = rep(max(x), 3), x = x, y = y)
+#opt = DEoptim(fn = perform_split, lower = c(min(x), min(x)), upper = c(max(x), max(x)), x = x, y = y, objective = SS)
+#opt$optim
+#k = 4
+#GenSA(rep(0, k), fn = perform_split, lower = rep(min(x), k), upper = rep(max(x), k), x = x, y = y, objective = SS)
 
-k = 4
-gr = function(i, x, y) sort(sample(quantile(x, seq(0, 1, length.out = 100), type = 1), size = k))
-a = optim(rep(0, k), fn = optFun2, x = x, y = y, method = "SANN", gr = gr, control = list(trace = TRUE))
-a
-microbenchmark(optFun(q[5], x, y, objective = SS), optFun2(q[5], x, y, objective = SS), times = 100)
+library(microbenchmark)
+microbenchmark(
+  optim(c(0), fn = perform_split_mem, x = x, y = y, objective = SS, method = "SANN", gr = gr, control = list(trace = TRUE, maxit = 5000)),
+  optim(c(0), fn = perform_split, x = x, y = y, objective = SS, method = "SANN", gr = gr, control = list(trace = TRUE, maxit = 5000)), times = 10)
 
 
 
@@ -98,7 +62,7 @@ treesplit2 = function(x, y, objective) {
     y.list = split(y, split.factor)
     x.list = split(x, split.factor)
 
-    res = vnapply(1:length(y.list), fun = function(i) {
+    res = vnapply(seq_along(y.list), fun = function(i) {
       objective(x = x.list[[i]], y = y.list[[i]])
     })
 
@@ -120,27 +84,7 @@ s
 
 microbenchmark(treesplit.numeric(x, y, objective = SS), treesplit2(x, y, objective = SS), times = 10)
 
-split_lm <- function(x, y) {
-  # try out all points as potential split points and ...
-  splits <- lapply(x, function(i) {
-    yleft <- y[x <= i]
-    yright <- y[x > i]
-    #SS(yleft) + SS(yright) # ... compute SS in both groups
-    # Create a subset of values of x that correspond
-    # to the values of y, i.e. ---> (x,y) \in N_j
-    xleft <- x[x <= i]
-    xright <- x[x > i]
-    if (length(xright) < 1) {
-      SS_mod(resp = yleft, feature = xleft)
-    } else {
-      SS_mod(resp = yleft, feature = xleft) + SS_mod(resp = yright, feature = xright)
-    }
-  })
-  # select the split point yielding the minimal sum of squares (SS)
-  best <- which.min(splits)
-  x[best]
-}
-split_lm(x, y) # the first split point:
+
 
 
 

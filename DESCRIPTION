@@ -1,0 +1,15 @@
+Package: customtrees
+Type: Package
+Title: Custom Decision Trees
+Version: 1.0
+Date: 2020-04-09
+Author: Giuseppe Casalicchio <giuseppe.casalicchio@stat.uni-muenchen.de>
+Maintainer: Giuseppe Casalicchio <giuseppe.casalicchio@stat.uni-muenchen.de>
+Description: Allows to fit custom decision trees with multiple splits. It also allows targets that are skalar, multivariate or functional.
+License: MIT + file LICENSE
+Depends:
+    R (>= 3.1.0)
+Imports:
+    BBmisc (>= 1.11),
+    backports,
+    checkmate (>= 2.0.0)

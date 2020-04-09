@@ -1,0 +1,135 @@
+## Install
+
+Install the development version from GitHub:
+
+```{r, eval = FALSE}
+remotes::install_github("giuseppec/customtrees")
+```
+
+## Objectives
+```{r}
+library(devtools)
+load_all()
+```
+
+```{r}
+# objective that fits a constant in the nodes (CART) 
+SS = function(x, y) {
+  ypred = mean(y)
+  sum((y - ypred)^2)
+}
+
+# objective that fits a linear model in the nodes (mob)
+SS_mod = function(x, y) {
+  ypred = predict(lm(y ~ x))
+  sum((y - ypred)^2)
+}
+
+# objective for multivariate targets (multivariate tree)
+SS_multi = function(x, y) {
+  center = sapply(y, mean)
+  cov = cov(y)
+  # does not really work???
+  sum(mahalanobis(y, center = center, cov = cov, tol = 1e-20))
+}
+
+SS_multi2 = function(x, y) {
+  sum(sapply(y, function(col) (col - mean(col))^2))
+}
+```
+
+## Quick Start
+
+```{r}
+library(statip)
+n = 5000
+set.seed(1)
+x1 = runif(n, -1, 1)
+x2 = runif(n, -1, 1)
+x3 = rbern(n, 0.5)
+x4 = rbern(n, 0.3)
+eps = rnorm(n, 0, 1)
+x5 = rbern(n, 0.5)
+x6 = rbern(n, 0.5)
+x7 = rnorm(n, mean=1,sd=3)
+x8 = rnorm(n, mean=1,sd=5)
+
+y=0.2*x1-8*x2+ ifelse( x3==0,I(16*x2),0) + ifelse(x1>mean(x1), I(17*x2),0) + ifelse(x4==1, I(8*x2),0) + eps
+
+dat = data.frame(x1, x2, x3, x4, x5, x6, x7, x8, y)
+
+library(iml)
+mod = randomForest(y ~ ., data = dat)
+X = dat[, setdiff(colnames(dat), "y")]
+model = Predictor$new(mod, data = X, y = dat$y)
+effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
+
+# library(gam)
+# data("Boston", package = "MASS")
+# mod = gam(medv ~ s(rm)*chas + s(lstat)*chas + ., data = Boston)
+# X = Boston[which(names(Boston) != "medv")]
+# model = Predictor$new(mod, data = X, y = Boston$medv)
+# effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "rm")
+
+library(ggplot2)
+ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
+  geom_line(aes(group = .id))
+
+library(tidyverse)
+Y = spread(effect$results$x2, .borders, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+str(X)
+str(Y)
+
+sp = lapply(X, function(feat) {
+  split_optimizer_exhaustive(feat, y = Y, n.splits = 1, objective = SS_multi)
+})
+
+obj = vnapply(sp, function(x) x$objective.value)
+obj
+sp[which.min(obj)]
+
+set.seed(12)
+X=matrix(runif(20*20),20,20)
+Y=matrix(runif(20*3),20,3)
+
+library(MultivariateRandomForest)
+
+m_feature=ncol(X)
+Index=1:nrow(Y)
+Inv_Cov_Y=solve(cov(Y), tol = 1e-20)
+ff2 = ncol(X) # number of features
+ff = sort(sample(ff2, m_feature)) 
+Command = 2 #MRF, as number of output feature is greater than 1
+Split_criteria=splitt2(X,Y,m_feature,Index,Inv_Cov_Y,Command,ff)
+Split_criteria
+
+
+sp = lapply(as.data.frame(X), function(feat) {
+  split_optimizer_exhaustive(feat, y = as.data.frame(Y), n.splits = 1, objective = SS_multi)
+})
+obj = vnapply(sp, function(x) x$objective.value)
+obj
+sp[which.min(obj)]
+```
+
+## Binary Split
+
+### Fit constant in the nodes
+
+
+
+
+### Fit linear model in the nodes
+
+## Multiple Split
+
+### Fit constant in the nodes
+
+### Fit linear model in the nodes
+
+## Multivariate Target
+
+### Fit constant in the nodes
+
+### Fit linear model in the nodes
