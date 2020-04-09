@@ -12,6 +12,33 @@ load_all()
 
 
 
+library(mlrMBO)
+
+
+ps = makeIntegerVectorParam("split.points", len = 1L, lower = 1, upper = length(x))
+#makeDiscreteVectorParam("split.points", len = 1L, values = unname(quantile(x, 1:99/100, type = 1)))
+ps = makeParamSet(ps)
+obj.fun = makeSingleObjectiveFunction(
+  name = "objective",
+  fn = perform_split,
+  par.set = ps)
+#ctrl = makeMBOControl()
+# do three MBO iterations
+#ctrl = setMBOControlTermination(ctrl, iters = 3L)
+# use 500 points in the focussearch (should be sufficient for 2d)
+#ctrl = setMBOControlInfill(ctrl, opt.focussearch.points = 500)
+ctrl = makeMBOControl(final.method = "best.predicted", final.evals = 10)
+ctrl = setMBOControlInfill(ctrl, crit = crit.ei)
+ctrl = setMBOControlTermination(ctrl, iters = 7)
+# create initial design
+des = generateDesign(n = 5L, getParamSet(obj.fun), fun = lhs::maximinLHS)
+
+res = mbo(obj.fun, design = des, control = ctrl, #show.info = FALSE,
+  more.args	= list(xval = x, y = y, min.node.size = 1, objective = SS))
+
+
+
+
 split_optimizer(x, y, objective = SS)
 
 #opt = DEoptim(fn = perform_split, lower = c(min(x), min(x)), upper = c(max(x), max(x)), x = x, y = y, objective = SS)

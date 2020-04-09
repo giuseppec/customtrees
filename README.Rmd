@@ -1,4 +1,14 @@
-## Install
+---
+output: github_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+set.seed(123)
+```
+
+# Install
 
 Install the development version from GitHub:
 
@@ -6,7 +16,7 @@ Install the development version from GitHub:
 remotes::install_github("giuseppec/customtrees")
 ```
 
-## Objectives
+# Objectives
 ```{r}
 library(devtools)
 load_all()
@@ -20,116 +30,158 @@ SS = function(x, y) {
 }
 
 # objective that fits a linear model in the nodes (mob)
-SS_mod = function(x, y) {
+SS_lm = function(x, y) {
   ypred = predict(lm(y ~ x))
   sum((y - ypred)^2)
 }
 
-# objective for multivariate targets (multivariate tree)
-SS_multi = function(x, y) {
-  center = sapply(y, mean)
-  cov = cov(y)
-  # does not really work???
-  sum(mahalanobis(y, center = center, cov = cov, tol = 1e-20))
-}
-
-SS_multi2 = function(x, y) {
-  sum(sapply(y, function(col) (col - mean(col))^2))
+# objective for multivariate targets (multivariate tree), see MultivariateRandomForest::Node_cost function
+SS_multi = function(x, y, cov) {
+  center = colMeans(y)
+  # cov = cov(y) we need to pass the cov of all data
+  sum(mahalanobis(y, center = center, cov = cov, tol = 1e-30))
 }
 ```
 
-## Quick Start
+# Current TODOs
+
+- Check if splits on categorical variables works and implement it
+- `split_optimizer` currently uses slow simulated annealing, might be improvable
+
+# CART with binary splits (constant model in node)
 
 ```{r}
-library(statip)
-n = 5000
-set.seed(1)
+nsim = 1000L
+x = x = sort(runif(n = nsim, min = 0, max = 2*pi))
+q = quantile(x, seq(0, 1, length.out = 100), type = 1)
+y = ifelse(x > pi/2, rnorm(nsim, mean = 0), rnorm(nsim, mean = 10, sd = 2))
+X = data.frame(x = x)
+
+split = split_parent_node(y, X, objective = SS, optimizer = split_optimizer_exhaustive)
+split
+
+# plot result
+plot(x, y)
+abline(v = split$split.points)
+```
+
+# CART with multiple splits (constant model in node)
+
+```{r}
+y = ifelse(x < pi/2, rnorm(nsim, mean = 0), 
+  ifelse(x < pi, rnorm(nsim, mean = 10, sd = 2), 
+    rnorm(nsim, mean = -10, sd = 5)))
+
+split = split_parent_node(y, X, objective = SS, optimizer = split_optimizer, 
+  n.splits = 2, control = list(maxit = 5000))
+split
+
+plot(x, y)
+abline(v = split$split.points)
+```
+
+# MOB with binary splits (linear model in node)
+
+```{r}
+y = 4 + 2 * cos(x) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
+
+split = split_parent_node(y, X, objective = SS_lm, optimizer = split_optimizer_exhaustive, 
+  n.splits = 1, control = list(maxit = 1000))
+split
+
+plot(x, y)
+abline(v = split$split.points)
+```
+
+# MOB with multiple splits (linear model in node)
+
+```{r}
+y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
+
+split = split_parent_node(y, X, objective = SS_lm, optimizer = split_optimizer, 
+  n.splits = 3, control = list(maxit = 1000))
+split
+
+plot(x, y)
+abline(v = split$split.points)
+```
+
+# Group ICE Curves with Multivariate Tree (binary splits, constant model in node)
+
+We first generate some functional data:
+
+```{r}
+# Simulate Data
+n = 1000
 x1 = runif(n, -1, 1)
 x2 = runif(n, -1, 1)
-x3 = rbern(n, 0.5)
-x4 = rbern(n, 0.3)
+x3 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
+x4 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.7, 0.3))
 eps = rnorm(n, 0, 1)
-x5 = rbern(n, 0.5)
-x6 = rbern(n, 0.5)
-x7 = rnorm(n, mean=1,sd=3)
-x8 = rnorm(n, mean=1,sd=5)
 
-y=0.2*x1-8*x2+ ifelse( x3==0,I(16*x2),0) + ifelse(x1>mean(x1), I(17*x2),0) + ifelse(x4==1, I(8*x2),0) + eps
+# noisy vars
+x5 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
+x6 = rnorm(n, mean = 1, sd = 5)
 
-dat = data.frame(x1, x2, x3, x4, x5, x6, x7, x8, y)
+y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
 
-library(iml)
-mod = randomForest(y ~ ., data = dat)
+dat = data.frame(x1, x2, x3, x4, x5, x6, y)
 X = dat[, setdiff(colnames(dat), "y")]
-model = Predictor$new(mod, data = X, y = dat$y)
+
+# Fit model and compute ICE for x2
+library(iml)
+library(ranger)
+mod = ranger(y ~ ., data = dat, num.trees = 10)
+pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
 effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
 
-# library(gam)
-# data("Boston", package = "MASS")
-# mod = gam(medv ~ s(rm)*chas + s(lstat)*chas + ., data = Boston)
-# X = Boston[which(names(Boston) != "medv")]
-# model = Predictor$new(mod, data = X, y = Boston$medv)
-# effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "rm")
-
+# Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
 library(ggplot2)
 ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
   geom_line(aes(group = .id))
+```
 
+Formulate curves above by multivariate target and find feature that splits the curves such that they are more homogenous in the nodes:
+
+```{r}
+# Get ICE values and arrange them in a horizontal matrix
 library(tidyverse)
 Y = spread(effect$results$x2, .borders, .value)
 Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
-str(X)
-str(Y)
+str(X) # contains our feature values
+str(Y) # contains ICE values for each grid point
 
-sp = lapply(X, function(feat) {
-  split_optimizer_exhaustive(feat, y = Y, n.splits = 1, objective = SS_multi)
-})
+# compute covariance for data and use this in for mahalanobis distance in the objective
+COV = cov(Y)
+SS_multi2 = function(x, y) SS_multi(x, y, cov = COV)
+sp = split_parent_node(Y = Y, X = X, objective = SS_multi2, 
+  n.splits = 1, min.node.size = 1, optimizer = split_optimizer_exhaustive)
+sp
 
-obj = vnapply(sp, function(x) x$objective.value)
-obj
-sp[which.min(obj)]
-
-set.seed(12)
-X=matrix(runif(20*20),20,20)
-Y=matrix(runif(20*3),20,3)
-
+# Compare with MultivariateRandomForest yields same result
 library(MultivariateRandomForest)
-
-m_feature=ncol(X)
-Index=1:nrow(Y)
-Inv_Cov_Y=solve(cov(Y), tol = 1e-20)
-ff2 = ncol(X) # number of features
-ff = sort(sample(ff2, m_feature)) 
-Command = 2 #MRF, as number of output feature is greater than 1
-Split_criteria=splitt2(X,Y,m_feature,Index,Inv_Cov_Y,Command,ff)
-Split_criteria
-
-
-sp = lapply(as.data.frame(X), function(feat) {
-  split_optimizer_exhaustive(feat, y = as.data.frame(Y), n.splits = 1, objective = SS_multi)
-})
-obj = vnapply(sp, function(x) x$objective.value)
-obj
-sp[which.min(obj)]
+invcov = solve(cov(Y), tol = 1e-30)
+sp2 = splitt2(X = as.matrix(X), Y = as.matrix(Y), m_feature = ncol(X), 
+  Index = 1:nrow(X), Inv_Cov_Y = invcov, Command = 2, ff = 1:ncol(X))
+sp2
 ```
 
-## Binary Split
+Visualize the results:
 
-### Fit constant in the nodes
+```{r}
+best.split = which.min(sp$objective.value)
+best.feature = sp$feature[best.split]
+best.point = sp$split.points[best.split]
+
+left.node = X[, best.feature] <= best.point
+right.node = !left.node
 
 
+plot.data = effect$results$x2
+plot.data$.split = as.factor(ifelse(plot.data$.id %in% which(left.node), "left.node", "right.node"))
 
+ggplot(plot.data, aes(x = .borders, y = .value)) + 
+  geom_line(aes(group = .id)) + facet_grid(~ .split)
+```
 
-### Fit linear model in the nodes
-
-## Multiple Split
-
-### Fit constant in the nodes
-
-### Fit linear model in the nodes
-
-## Multivariate Target
-
-### Fit constant in the nodes
-
-### Fit linear model in the nodes
