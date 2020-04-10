@@ -1,4 +1,4 @@
-split_parent_node = function(Y, X, n.splits = 1, min.node.size = 10, objective, optimizer, ...) {
+split_parent_node = function(Y, X, n.splits = 1, min.node.size = 1, objective, optimizer, ...) {
   assert_data_frame(X)
   #assert_choice(target.col, choices = colnames(data))
   assert_integerish(n.splits)
@@ -28,8 +28,9 @@ generate_node_index = function(Y, X, result) {
     xval = X else
       xval = X[, feature]
 
-  sp = cut(xval, c(min(xval), split.points, max(xval)), include.lowest = TRUE)
+  cuts = c(min(xval), split.points, max(xval))
+  sp = cut(xval, breaks = unique(cuts), include.lowest = TRUE)
   #levels(sp) = paste0(feature, " in ", levels(sp))
 
-  split(seq_along(xval), sp)
+  return(list(class = sp, index = split(seq_along(xval), sp)))
 }

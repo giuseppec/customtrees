@@ -5,6 +5,25 @@ q = quantile(x, seq(0, 1, length.out = 100), type = 1)
 y = 4 + 2 * cos(x) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 plot(x,y)
 
+SS_frechet2 = function(x, y) { # slow
+  # using only y-axis of curves is enough as x-axis is always the same for all curves
+  require(fda.usc)
+  center = unname(colMeans(y)) # this is the y-axis of pdp
+  pdp.coord = cbind(center)
+  dist = apply(y, 1, function(ice) Frechet(pdp.coord, cbind(ice)))
+  sum(dist)
+}
+
+SS_hausdorff = function(x, y) { # slow and does not always work, buggy?
+  require(SimilarityMeasures)
+  center = unname(colMeans(y)) # this is the y-axis of pdp
+  #grid = as.numeric(names(center)) # x-axis of pdp and ice
+  #pdp.coord = cbind(grid, center)
+  #dist = apply(y, 1, function(ice) metric.hausdorff(pdp.coord, cbind(grid, ice)))
+  pdp.coord = cbind(center)
+  dist = apply(y, 1, function(ice) metric.hausdorff(pdp.coord, cbind(ice)))
+  sum(dist)
+}
 
 
 library(devtools)
@@ -36,13 +55,44 @@ des = generateDesign(n = 5L, getParamSet(obj.fun), fun = lhs::maximinLHS)
 res = mbo(obj.fun, design = des, control = ctrl, #show.info = FALSE,
   more.args	= list(xval = x, y = y, min.node.size = 1, objective = SS))
 
-
-
-
 find_best_multiway_split(x, y, objective = SS)
 
-#opt = DEoptim(fn = perform_split, lower = c(min(x), min(x)), upper = c(max(x), max(x)), x = x, y = y, objective = SS)
-#opt$optim
+fnMap = function(xi) sort(x[vnapply(xi, function(i) which.min(abs(x - i)))])
+#.perform_split = memoise(perform_split)
+n.split = 4
+init = replicate(n.split, sample(x, size = n.split*10))
+init = t(apply(init, 1, sort))
+opt = DEoptim(fn = perform_split, lower = rep(min(x), n.split), upper = rep(max(x), n.split), x = x, y = y,
+  objective = SS, min.node.size = 1, fnMap = fnMap, control = list(trace = FALSE, initialpop = init, itermax = 100))
+opt$optim
+
+opt = JDEoptim(lower = rep(min(x), n.split), upper = rep(max(x), n.split), fn = perform_split, x = x, y = y,
+  objective = SS, min.node.size = 1)
+
+o = genoud(perform_split, nvars = n.split, max = FALSE, x = x, y = y,
+  objective = SS, min.node.size = 1)
+
+
+.perform_split = function(par) perform_split(split.points = par, xval = x, y = y, objective = objective, min.node.size = min.node.size)
+op = malschains(.perform_split, lower = rep(min(x), n.split), upper = rep(max(x), n.split), initialpop = init, verbosity = 0,
+  control = malschains.control(istep = 300, ls = "sw"))
+op$sol
+op$fitness
+
+
+# sample split points from observed x values as candidates in optimization procedure
+gr = function(i, xval, y, objective, min.node.size) {
+  npar = length(i)
+  q = generate_split_candidates(xval, use.quantiles = use.quantiles)
+  par = sample(q, size = npar)
+  sort(par)
+}
+# use simulated annealing to find optimal split points
+init = rep(0, n.split)
+best = optim(init, fn = perform_split,
+  xval = xval, y = y, objective = objective, min.node.size = min.node.size,
+  method = "SANN", gr = gr, control = list(maxit = 10000))
+best
 #k = 4
 #GenSA(rep(0, k), fn = perform_split, lower = rep(min(x), k), upper = rep(max(x), k), x = x, y = y, objective = SS)
 

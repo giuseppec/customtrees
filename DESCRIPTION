@@ -13,4 +13,5 @@ Depends:
     data.table
 Imports:
     backports,     
+    Rmalschains,
     BBmisc (>= 1.11)
