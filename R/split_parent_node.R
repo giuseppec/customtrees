@@ -28,7 +28,8 @@ generate_node_index = function(Y, X, result) {
     xval = X else
       xval = X[, feature]
 
-  sp = Hmisc::cut2(xval, split.points, rightmost.closed = TRUE)
+  sp = cut(xval, c(min(xval), split.points, max(xval)), include.lowest = TRUE)
+  #levels(sp) = paste0(feature, " in ", levels(sp))
 
   split(seq_along(xval), sp)
 }

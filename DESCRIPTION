@@ -13,5 +13,4 @@ Depends:
     data.table
 Imports:
     backports,     
-    BBmisc (>= 1.11),
-    Hmisc
+    BBmisc (>= 1.11)
