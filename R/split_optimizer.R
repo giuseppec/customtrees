@@ -1,45 +1,46 @@
 # finds best split points and returns value of objective function
-split_optimizer = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
-  init = rep(0, n.splits)
-
+find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
   # sample split points from observed x values as candidates in optimization procedure
   gr = function(i, xval, y, objective, min.node.size) {
     npar = length(i)
-    if (use.quantiles) {
-      q = quantile(xval, seq(0.01, 0.99, by = 0.01), type = 1)
-    } else {
-      q = sort(unique(xval))
-    }
+    q = generate_split_candidates(xval, use.quantiles = use.quantiles)
     par = sample(q, size = npar)
     sort(par)
   }
 
   # use simulated annealing to find optimal split points
-  res = optim(init, fn = perform_split,
+  init = rep(0, n.splits)
+  best = optim(init, fn = perform_split,
     xval = xval, y = y, objective = objective, min.node.size = min.node.size,
     method = "SANN", gr = gr, ...)
 
-  list(split.points = res$par, objective.value = res$value)
+  return(list(split.points = best$par, objective.value = best$value))
 }
 
 # This is faster for binary splits (but does not work for multiple splits)
-split_optimizer_exhaustive = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
+find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
   assert_choice(n.splits, choices = 1)
 
+  # use different split candidates to perform split
+  q = generate_split_candidates(xval, use.quantiles = use.quantiles)
+  splits = BBmisc::vnapply(q, function(i) {
+    perform_split(i, xval = xval, y = y, objective = objective, min.node.size = min.node.size)
+  })
+  # select the split point yielding the minimal objective
+  best = which.min(splits)
+
+  return(list(split.points = q[best], objective.value = splits[best]))
+}
+
+generate_split_candidates = function(xval, use.quantiles = TRUE) {
   if (use.quantiles) { # to speedup we use only quantile values as possible split points
-    q = quantile(xval, seq(0.01, 0.99, by = 0.01), type = 1)
+    q = unique(quantile(xval, seq(0.01, 0.99, by = 0.01), type = 1))
   } else {
     q = sort(unique(xval))
   }
-
-  splits = vnapply(q, function(i) {
-    perform_split(i, xval = xval, y = y, objective = objective, min.node.size = min.node.size)
-  })
-
-  # select the split point yielding the minimal objective
-  best = which.min(splits)
-  # split.index = which(x == q[best]) # TODO: potential bug if quantile value not observed value in x?
-  list(split.points = q[best], objective.value = splits[best])
+  # use mid-point of two subsequent split candidates
+  q = q + c(diff(q)/2, 0)
+  return(q)
 }
 
 #
@@ -86,7 +87,7 @@ split_optimizer_exhaustive = function(xval, y, n.splits = 1, min.node.size = 1, 
 #     }, supported = custom)
 #
 #
-# opt2 = split_optimizer(x, y, objective = SS, n.splits = 2)
+# opt2 = find_best_multiway_split(x, y, objective = SS, n.splits = 2)
 # opt2
 #
 # k = 1

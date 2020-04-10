@@ -29,7 +29,7 @@ perform_split.numeric = function(split.points, xval, y, min.node.size, objective
   # compute objective in each interval and sum it up
   y.list = split(y, split.factor)
   x.list = split(xval, split.factor)
-  res = vnapply(seq_along(y.list), fun = function(i) {
+  res = BBmisc::vnapply(seq_along(y.list), fun = function(i) {
     objective(x = x.list[[i]], y = y.list[[i]])
   })
   sum(res)

@@ -43,10 +43,14 @@ SS_multi = function(x, y, cov) {
 }
 ```
 
-# Current TODOs
+# Notes
 
-- Check if splits on categorical variables works and implement it
-- `split_optimizer` currently uses slow simulated annealing, might be improvable
+- This package is not intended to be fast. It serves as a modular framework and playground to explore/study the splitting of features by custom objectives.
+- Splits for categorical variables currently not implemented and tested. Try to handle categoricals as numerics as workaround. 
+- The `perform_split` function computes (and aggregates) the objective in the generated nodes after splitting w.r.t. specific split points.
+- Binary splits generate two nodes and are implemented in `find_best_binary_split`. The implementation  does exhaustive search of split point candidates to find the best split point for a given feature. 
+- Multiple splits generate multiple nodes and are implemented in `find_best_multiway_split`. The implementation currently uses a slow simulated annealing optimization to find the best split point for a given feature (might be improved and replaced with other, faster optimization procedures).
+
 
 # CART with binary splits (constant model in node)
 
@@ -57,12 +61,12 @@ q = quantile(x, seq(0, 1, length.out = 100), type = 1)
 y = ifelse(x > pi/2, rnorm(nsim, mean = 0), rnorm(nsim, mean = 10, sd = 2))
 X = data.frame(x = x)
 
-split = split_parent_node(y, X, objective = SS, optimizer = split_optimizer_exhaustive)
+split = split_parent_node(y, X, objective = SS, optimizer = find_best_binary_split)
 split
 
 # plot result
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 # CART with multiple splits (constant model in node)
@@ -72,12 +76,12 @@ y = ifelse(x < pi/2, rnorm(nsim, mean = 0),
   ifelse(x < pi, rnorm(nsim, mean = 10, sd = 2), 
     rnorm(nsim, mean = -10, sd = 5)))
 
-split = split_parent_node(y, X, objective = SS, optimizer = split_optimizer, 
+split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split, 
   n.splits = 2, control = list(maxit = 5000))
 split
 
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 # MOB with binary splits (linear model in node)
@@ -85,12 +89,12 @@ abline(v = split$split.points)
 ```{r}
 y = 4 + 2 * cos(x) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 
-split = split_parent_node(y, X, objective = SS_lm, optimizer = split_optimizer_exhaustive, 
+split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_binary_split, 
   n.splits = 1, control = list(maxit = 1000))
 split
 
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 # MOB with multiple splits (linear model in node)
@@ -98,12 +102,12 @@ abline(v = split$split.points)
 ```{r}
 y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 
-split = split_parent_node(y, X, objective = SS_lm, optimizer = split_optimizer, 
+split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split, 
   n.splits = 3, control = list(maxit = 1000))
 split
 
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 # Group ICE Curves with Multivariate Tree (binary splits, constant model in node)
@@ -156,32 +160,27 @@ str(Y) # contains ICE values for each grid point
 COV = cov(Y)
 SS_multi2 = function(x, y) SS_multi(x, y, cov = COV)
 sp = split_parent_node(Y = Y, X = X, objective = SS_multi2, 
-  n.splits = 1, min.node.size = 1, optimizer = split_optimizer_exhaustive)
+  n.splits = 1, min.node.size = 1, optimizer = find_best_binary_split)
 sp
+node_index = generate_node_index(Y, X, result = sp)
+str(node_index)
+```
 
+```{r}
 # Compare with MultivariateRandomForest yields same result
 library(MultivariateRandomForest)
 invcov = solve(cov(Y), tol = 1e-30)
 sp2 = splitt2(X = as.matrix(X), Y = as.matrix(Y), m_feature = ncol(X), 
   Index = 1:nrow(X), Inv_Cov_Y = invcov, Command = 2, ff = 1:ncol(X))
-sp2
+str(sp2)
 ```
 
 Visualize the results:
 
 ```{r}
-best.split = which.min(sp$objective.value)
-best.feature = sp$feature[best.split]
-best.point = sp$split.points[best.split]
-
-left.node = X[, best.feature] <= best.point
-right.node = !left.node
-
-
 plot.data = effect$results$x2
-plot.data$.split = as.factor(ifelse(plot.data$.id %in% which(left.node), "left.node", "right.node"))
+plot.data$.split = as.factor(ifelse(plot.data$.id %in% node_index[[1]], "left.node", "right.node"))
 
 ggplot(plot.data, aes(x = .borders, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
-

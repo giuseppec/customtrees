@@ -35,11 +35,24 @@ SS_multi = function(x, y, cov) {
 }
 ```
 
-# Current TODOs
+# Notes
 
-  - Check if splits on categorical variables works and implement it
-  - `split_optimizer` currently uses slow simulated annealing, might be
-    improvable
+  - This package is not intended to be fast. It serves as a modular
+    framework and playground to explore/study the splitting of features
+    by custom objectives.
+  - Splits for categorical variables currently not implemented and
+    tested. Try to handle categoricals as numerics as workaround.
+  - The `perform_split` function computes (and aggregates) the objective
+    in the generated nodes after splitting w.r.t. specific split points.
+  - Binary splits generate two nodes and are implemented in
+    `find_best_binary_split`. The implementation does exhaustive search
+    of split point candidates to find the best split point for a given
+    feature.
+  - Multiple splits generate multiple nodes and are implemented in
+    `find_best_multiway_split`. The implementation currently uses a slow
+    simulated annealing optimization to find the best split point for a
+    given feature (might be improved and replaced with other, faster
+    optimization procedures).
 
 # CART with binary splits (constant model in node)
 
@@ -50,17 +63,17 @@ q = quantile(x, seq(0, 1, length.out = 100), type = 1)
 y = ifelse(x > pi/2, rnorm(nsim, mean = 0), rnorm(nsim, mean = 10, sd = 2))
 X = data.frame(x = x)
 
-split = split_parent_node(y, X, objective = SS, optimizer = split_optimizer_exhaustive)
+split = split_parent_node(y, X, objective = SS, optimizer = find_best_binary_split)
 split
 ```
 
-    ##    feature split.points objective.value
-    ## 1:       x     1.590268        2044.898
+    ##    feature objective.value split.points best.split
+    ## 1:       x        1900.012     1.547843       TRUE
 
 ``` r
 # plot result
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
@@ -72,18 +85,17 @@ y = ifelse(x < pi/2, rnorm(nsim, mean = 0),
   ifelse(x < pi, rnorm(nsim, mean = 10, sd = 2), 
     rnorm(nsim, mean = -10, sd = 5)))
 
-split = split_parent_node(y, X, objective = SS, optimizer = split_optimizer, 
+split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split, 
   n.splits = 2, control = list(maxit = 5000))
 split
 ```
 
-    ##    feature split.points objective.value
-    ## 1:       x     1.505417        14719.45
-    ## 2:       x     3.159866        14719.45
+    ##    feature objective.value      split.points best.split
+    ## 1:       x         13897.6 1.547843,3.118802       TRUE
 
 ``` r
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
@@ -93,17 +105,17 @@ abline(v = split$split.points)
 ``` r
 y = 4 + 2 * cos(x) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 
-split = split_parent_node(y, X, objective = SS_lm, optimizer = split_optimizer_exhaustive, 
+split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_binary_split, 
   n.splits = 1, control = list(maxit = 1000))
 split
 ```
 
-    ##    feature split.points objective.value
-    ## 1:       x     3.159866        140.3408
+    ##    feature objective.value split.points best.split
+    ## 1:       x        140.2617     3.118802       TRUE
 
 ``` r
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
@@ -113,19 +125,17 @@ abline(v = split$split.points)
 ``` r
 y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 
-split = split_parent_node(y, X, objective = SS_lm, optimizer = split_optimizer, 
+split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split, 
   n.splits = 3, control = list(maxit = 1000))
 split
 ```
 
-    ##    feature split.points objective.value
-    ## 1:       x     1.722640        169.0321
-    ## 2:       x     3.236027        169.0321
-    ## 3:       x     4.787695        169.0321
+    ##    feature objective.value               split.points best.split
+    ## 1:       x        171.9338 1.480383,3.118802,4.529151       TRUE
 
 ``` r
 plot(x, y)
-abline(v = split$split.points)
+abline(v = unlist(split$split.points))
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
@@ -218,17 +228,26 @@ str(Y) # contains ICE values for each grid point
 COV = cov(Y)
 SS_multi2 = function(x, y) SS_multi(x, y, cov = COV)
 sp = split_parent_node(Y = Y, X = X, objective = SS_multi2, 
-  n.splits = 1, min.node.size = 1, optimizer = split_optimizer_exhaustive)
+  n.splits = 1, min.node.size = 1, optimizer = find_best_binary_split)
 sp
 ```
 
-    ##    feature split.points objective.value
-    ## 1:      x1  -0.01498066        19372.42
-    ## 2:      x2   0.03784932        19936.75
-    ## 3:      x3   0.00000000        19066.63
-    ## 4:      x4   0.00000000        19282.92
-    ## 5:      x5   0.00000000        19475.43
-    ## 6:      x6   9.51962499        19509.92
+    ##    feature objective.value split.points best.split
+    ## 1:      x1        19373.03 -0.008479368      FALSE
+    ## 2:      x2        19937.16   0.05241069      FALSE
+    ## 3:      x3        19066.63          0.5       TRUE
+    ## 4:      x4        19282.92          0.5      FALSE
+    ## 5:      x5        19475.43          0.5      FALSE
+    ## 6:      x6        19505.03     9.783206      FALSE
+
+``` r
+node_index = generate_node_index(Y, X, result = sp)
+str(node_index)
+```
+
+    ## List of 2
+    ##  $ 0.0      : int [1:480] 1 4 8 13 14 16 17 20 21 22 ...
+    ##  $ [0.5,1.0]: int [1:520] 2 3 5 6 7 9 10 11 12 15 ...
 
 ``` r
 # Compare with MultivariateRandomForest yields same result
@@ -236,102 +255,23 @@ library(MultivariateRandomForest)
 invcov = solve(cov(Y), tol = 1e-30)
 sp2 = splitt2(X = as.matrix(X), Y = as.matrix(Y), m_feature = ncol(X), 
   Index = 1:nrow(X), Inv_Cov_Y = invcov, Command = 2, ff = 1:ncol(X))
-sp2
+str(sp2)
 ```
 
-    ## $Idx_left
-    ##   [1]   1   4   8  13  14  16  17  20  21  22  24  26  29  34  36  37  38
-    ##  [18]  39  41  42  43  45  46  47  49  50  52  53  54  55  57  58  59  60
-    ##  [35]  61  66  68  74  78  80  81  84  87  88  92  96  97 100 101 102 105
-    ##  [52] 106 108 109 110 111 112 115 123 125 127 128 129 130 132 133 134 138
-    ##  [69] 140 141 146 148 149 152 153 154 155 156 157 159 162 164 168 169 171
-    ##  [86] 172 173 174 175 178 180 182 188 189 191 192 194 199 200 202 204 207
-    ## [103] 209 210 212 213 218 222 225 229 231 232 234 235 237 240 244 246 249
-    ## [120] 251 252 256 257 258 261 262 263 270 272 273 275 279 282 283 284 286
-    ## [137] 287 288 293 296 297 298 300 305 307 308 309 310 314 315 319 321 324
-    ## [154] 325 326 327 328 330 337 346 347 349 350 351 354 356 357 358 359 361
-    ## [171] 365 366 368 369 371 372 374 376 377 379 381 383 384 385 386 389 391
-    ## [188] 392 395 397 400 401 402 403 404 407 410 411 412 416 418 419 424 425
-    ## [205] 426 427 431 433 434 437 439 441 443 444 445 447 449 452 456 458 460
-    ## [222] 462 463 467 468 469 470 475 476 479 480 481 482 484 485 486 487 488
-    ## [239] 491 495 499 506 509 510 511 514 515 517 518 522 525 526 528 529 530
-    ## [256] 531 532 536 539 542 546 549 558 559 560 561 562 564 568 569 573 574
-    ## [273] 577 579 580 581 582 586 592 594 596 600 603 604 605 606 607 608 609
-    ## [290] 613 616 617 618 619 620 621 627 628 632 635 636 637 639 640 641 642
-    ## [307] 644 645 647 648 649 656 659 660 664 667 669 670 672 674 675 676 682
-    ## [324] 685 686 688 689 690 692 693 698 702 703 704 707 708 709 710 711 713
-    ## [341] 715 716 720 721 723 729 731 732 736 738 739 741 743 744 745 747 751
-    ## [358] 752 753 754 755 756 757 760 762 764 767 769 775 777 778 779 780 782
-    ## [375] 784 785 786 787 789 790 791 792 793 796 797 801 804 806 811 813 814
-    ## [392] 815 816 817 818 819 820 824 826 827 828 829 832 835 838 841 844 847
-    ## [409] 848 850 851 852 855 857 860 861 862 867 868 870 875 878 880 881 882
-    ## [426] 884 888 890 892 895 896 898 901 904 905 906 909 910 913 918 919 920
-    ## [443] 922 924 929 932 933 934 936 937 939 940 941 943 944 945 950 954 958
-    ## [460] 961 967 969 971 972 973 975 976 978 979 980 982 984 988 989 990 991
-    ## [477] 992 994 995 996
-    ## 
-    ## $Idx_right
-    ##   [1]    2    3    5    6    7    9   10   11   12   15   18   19   23   25
-    ##  [15]   27   28   30   31   32   33   35   40   44   48   51   56   62   63
-    ##  [29]   64   65   67   69   70   71   72   73   75   76   77   79   82   83
-    ##  [43]   85   86   89   90   91   93   94   95   98   99  103  104  107  113
-    ##  [57]  114  116  117  118  119  120  121  122  124  126  131  135  136  137
-    ##  [71]  139  142  143  144  145  147  150  151  158  160  161  163  165  166
-    ##  [85]  167  170  176  177  179  181  183  184  185  186  187  190  193  195
-    ##  [99]  196  197  198  201  203  205  206  208  211  214  215  216  217  219
-    ## [113]  220  221  223  224  226  227  228  230  233  236  238  239  241  242
-    ## [127]  243  245  247  248  250  253  254  255  259  260  264  265  266  267
-    ## [141]  268  269  271  274  276  277  278  280  281  285  289  290  291  292
-    ## [155]  294  295  299  301  302  303  304  306  311  312  313  316  317  318
-    ## [169]  320  322  323  329  331  332  333  334  335  336  338  339  340  341
-    ## [183]  342  343  344  345  348  352  353  355  360  362  363  364  367  370
-    ## [197]  373  375  378  380  382  387  388  390  393  394  396  398  399  405
-    ## [211]  406  408  409  413  414  415  417  420  421  422  423  428  429  430
-    ## [225]  432  435  436  438  440  442  446  448  450  451  453  454  455  457
-    ## [239]  459  461  464  465  466  471  472  473  474  477  478  483  489  490
-    ## [253]  492  493  494  496  497  498  500  501  502  503  504  505  507  508
-    ## [267]  512  513  516  519  520  521  523  524  527  533  534  535  537  538
-    ## [281]  540  541  543  544  545  547  548  550  551  552  553  554  555  556
-    ## [295]  557  563  565  566  567  570  571  572  575  576  578  583  584  585
-    ## [309]  587  588  589  590  591  593  595  597  598  599  601  602  610  611
-    ## [323]  612  614  615  622  623  624  625  626  629  630  631  633  634  638
-    ## [337]  643  646  650  651  652  653  654  655  657  658  661  662  663  665
-    ## [351]  666  668  671  673  677  678  679  680  681  683  684  687  691  694
-    ## [365]  695  696  697  699  700  701  705  706  712  714  717  718  719  722
-    ## [379]  724  725  726  727  728  730  733  734  735  737  740  742  746  748
-    ## [393]  749  750  758  759  761  763  765  766  768  770  771  772  773  774
-    ## [407]  776  781  783  788  794  795  798  799  800  802  803  805  807  808
-    ## [421]  809  810  812  821  822  823  825  830  831  833  834  836  837  839
-    ## [435]  840  842  843  845  846  849  853  854  856  858  859  863  864  865
-    ## [449]  866  869  871  872  873  874  876  877  879  883  885  886  887  889
-    ## [463]  891  893  894  897  899  900  902  903  907  908  911  912  914  915
-    ## [477]  916  917  921  923  925  926  927  928  930  931  935  938  942  946
-    ## [491]  947  948  949  951  952  953  955  956  957  959  960  962  963  964
-    ## [505]  965  966  968  970  974  977  981  983  985  986  987  993  997  998
-    ## [519]  999 1000
-    ## 
-    ## $Feature_number
-    ## [1] 3
-    ## 
-    ## $Threshold_value
-    ## [1] 0.5
+    ## List of 4
+    ##  $ Idx_left       : int [1:480] 1 4 8 13 14 16 17 20 21 22 ...
+    ##  $ Idx_right      : int [1:520] 2 3 5 6 7 9 10 11 12 15 ...
+    ##  $ Feature_number : int 3
+    ##  $ Threshold_value: num 0.5
 
 Visualize the results:
 
 ``` r
-best.split = which.min(sp$objective.value)
-best.feature = sp$feature[best.split]
-best.point = sp$split.points[best.split]
-
-left.node = X[, best.feature] <= best.point
-right.node = !left.node
-
-
 plot.data = effect$results$x2
-plot.data$.split = as.factor(ifelse(plot.data$.id %in% which(left.node), "left.node", "right.node"))
+plot.data$.split = as.factor(ifelse(plot.data$.id %in% node_index[[1]], "left.node", "right.node"))
 
 ggplot(plot.data, aes(x = .borders, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->

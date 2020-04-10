@@ -39,7 +39,7 @@ res = mbo(obj.fun, design = des, control = ctrl, #show.info = FALSE,
 
 
 
-split_optimizer(x, y, objective = SS)
+find_best_multiway_split(x, y, objective = SS)
 
 #opt = DEoptim(fn = perform_split, lower = c(min(x), min(x)), upper = c(max(x), max(x)), x = x, y = y, objective = SS)
 #opt$optim
