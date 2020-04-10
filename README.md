@@ -195,6 +195,8 @@ x5 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
 x6 = rnorm(n, mean = 1, sd = 5)
 
 y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
+# We also get interesting results using a 2-way interaction of numeric features
+# y = 0.2*x1 - 8*x2 + 8*x6*x2 + eps
 
 dat = data.frame(x1, x2, x3, x4, x5, x6, y)
 X = dat[, setdiff(colnames(dat), "y")]
