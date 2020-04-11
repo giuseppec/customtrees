@@ -151,14 +151,6 @@ treesplit2 = function(x, y, objective) {
   list(split.index = split.index, split.point = q[best])
 }
 
-# TODO
-treesplit.factor = function(x, y, objective) {
-  # TODO
-}
-
-s = treesplit.numeric(x, y, objective = SS)
-s
-
 microbenchmark(treesplit.numeric(x, y, objective = SS), treesplit2(x, y, objective = SS), times = 10)
 
 

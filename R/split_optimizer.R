@@ -1,11 +1,13 @@
 # This is faster for binary splits (but does not work for multiple splits)
-find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
+find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1,
+  objective, ...) {
   assert_choice(n.splits, choices = 1)
 
   # use different split candidates to perform split
-  q = generate_split_candidates(xval, use.quantiles = use.quantiles)
+  q = generate_split_candidates(xval, use.quantiles = TRUE)
   splits = BBmisc::vnapply(q, function(i) {
-    perform_split(i, xval = xval, y = y, objective = objective, min.node.size = min.node.size)
+    perform_split(i, xval = xval, y = y, min.node.size = min.node.size,
+      objective = objective)
   })
   # select the split point yielding the minimal objective
   best = which.min(splits)
@@ -14,43 +16,43 @@ find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1, obje
 }
 
 # Optimization with simulated annealing: finds best split points and returns value of objective function
-find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1, objective,
-  use.quantiles = FALSE, control = NULL, ...) {
-
+find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1,
+  objective, control = NULL, ...) {
   unique.x = length(unique(xval))
   # max. number of splits to be performed must be unique.x-1
   if (n.splits >= unique.x)
     n.splits = unique.x - 1
   # if only one split is needed, we use exhaustive search
   if (n.splits == 1)
-    return(find_best_binary_split(xval, y, n.splits = n.splits,
-      min.node.size = min.node.size, objective = objective, use.quantiles = use.quantiles))
+    return(find_best_binary_split(xval, y, n.splits = n.splits, min.node.size = min.node.size,
+      objective = objective))
 
   # sample split points from observed x values as candidates in optimization procedure
   gr = function(i, xval, y, objective, min.node.size) {
     npar = length(i)
-    q = generate_split_candidates(xval, use.quantiles = use.quantiles)
+    q = generate_split_candidates(xval, use.quantiles = FALSE)
     sort(sample(q, size = npar))
   }
 
   # replace maximum number of evaluations depending of number of unique x values
   xval.ncomb = prod(rep(unique.x, n.splits))
   if (is.null(control))
-    control = list(maxit = 10000)
+    control = list(maxit = 5000)
   control$maxit = min(control$maxit, xval.ncomb)
 
   # use simulated annealing to find optimal split points
   init = rep(0, n.splits)
   best = optim(init, fn = perform_split,
-    xval = xval, y = y, objective = objective, min.node.size = min.node.size,
+    xval = xval, y = y, min.node.size = min.node.size,
+    objective = objective,
     method = "SANN", gr = gr, ...)
 
   return(list(split.points = best$par, objective.value = best$value))
 }
 
 # Optimization with MA-LS Chains: finds best split points and returns value of objective function
-find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1, objective,
-  use.quantiles = FALSE, control = NULL, ...) {
+find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
+  objective, control = NULL, ...) {
   unique.x = length(unique(xval))
   # max. number of splits to be performed must be unique.x-1
   if (n.splits >= unique.x)
@@ -58,10 +60,10 @@ find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1, o
   # if only one split is needed, we use exhaustive search
   if (n.splits == 1)
     return(find_best_binary_split(xval, y, n.splits = n.splits,
-      min.node.size = min.node.size, objective = objective, use.quantiles = use.quantiles))
+      min.node.size = min.node.size, objective = objective))
 
   # generate initial population
-  xval.candidates = generate_split_candidates(xval, use.quantiles = use.quantiles)
+  xval.candidates = generate_split_candidates(xval, use.quantiles = FALSE)
   pop = replicate(n.splits, sample(xval.candidates, size = min(n.splits*10, unique.x)))
   pop = unique(pop)
 
@@ -77,22 +79,13 @@ find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1, o
 
   # optimization function
   .perform_split = function(par)
-    perform_split(split.points = par, xval = xval, y = y, objective = objective, min.node.size = min.node.size)
+    perform_split(split.points = par, xval = xval, y = y, min.node.size = min.node.size,
+      objective = objective)
   best = Rmalschains::malschains(.perform_split, lower = lower, upper = upper,
     initialpop = pop, verbosity = 0, control = control, ...) #   control = malschains.control(istep = 300, ls = "sw"),
 
   return(list(split.points = sort(best$sol), objective.value = best$fitness))
 }
-
-# # finds best split points and returns value of objective function
-# find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
-#   # use simulated annealing to find optimal split points
-#   init = rep(0, n.splits)
-#   nlm(f = perform_split, p = init, xval = xval, y = y, objective = objective, min.node.size = min.node.size)
-#   fun = function(s) perform_split(split.points = s, xval = x, y = y, objective = objective, min.node.size = min.node.size)
-#   best = optimization::optim_sa(fun = fun, start = init, lower = rep(min(x), n.splits), upper = rep(max(x), n.splits))
-#   return(list(split.points = best$par, objective.value = best$function_value))
-# }
 
 generate_split_candidates = function(xval, use.quantiles = TRUE) {
   if (use.quantiles) { # to speedup we use only quantile values as possible split points
@@ -109,6 +102,15 @@ generate_split_candidates = function(xval, use.quantiles = TRUE) {
   return(q)
 }
 
+# # finds best split points and returns value of objective function
+# find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1, objective, use.quantiles = TRUE, ...) {
+#   # use simulated annealing to find optimal split points
+#   init = rep(0, n.splits)
+#   nlm(f = perform_split, p = init, xval = xval, y = y, objective = objective, min.node.size = min.node.size)
+#   fun = function(s) perform_split(split.points = s, xval = x, y = y, objective = objective, min.node.size = min.node.size)
+#   best = optimization::optim_sa(fun = fun, start = init, lower = rep(min(x), n.splits), upper = rep(max(x), n.splits))
+#   return(list(split.points = best$par, objective.value = best$function_value))
+# }
 #
 # opt = DEoptim(fn = perform_split, lower = rep(min(x), 1), upper = rep(max(x), 1), min.node.size = 10,
 #   x = x, y = y, objective = SS, control = DEoptim.control(initialpop = cbind(x)))

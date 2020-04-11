@@ -10,46 +10,62 @@ set.seed(123)
 
 # Install
 
+To make use of functions from this package, you need to clone this repository, install the `devtools` R package, navigate to the directory of this package and use the `load_all()` function.
+
+```{r}
+# install.packages("devtools")
+library(devtools)
+load_all()
+```
+
 Install the development version from GitHub:
 
 ```{r, eval = FALSE}
-remotes::install_github("giuseppec/customtrees")
+# Currently, documentation is missing. Hence, installation may fail
+# remotes::install_github("giuseppec/customtrees")
 ```
 
-# Objectives
+# Notes
+
+- This package is not intended to be fast. It serves as a modular framework and playground to explore/study the splitting of features by custom objectives.
+- Currently only trees of depth 1 are fitted with `split_parent_node`. If you want a tree, you need to call this function recursively on the generated child nodes. You can use `generate_node_index` to get the split indices of the observations from the current node. 
+- Splits for categorical variables currently not implemented and tested. Try to handle categoricals as numerics as workaround. 
+- The `perform_split` function computes (and aggregates) the objective in the generated nodes after splitting w.r.t. specific split points.
+- Binary splits generate two nodes and are implemented in `find_best_binary_split`. The implementation  does exhaustive search of split point candidates to find the best split point for a given feature. 
+- Multiple splits generate multiple nodes and are implemented in `find_best_multiway_split`. The implementation currently uses a slow simulated annealing optimization to find the best split point for a given feature (might be improved and replaced with other, faster optimization procedures).
+
+# Define Objectives used as Split Criteria
 ```{r}
-library(devtools)
 library(tidyverse)
 library(Rmalschains)
 library(iml)
 library(ranger)
 library(kmlShape)
 library(dtw)
-load_all()
 ```
 
 ```{r}
 # objective that fits a constant in the nodes (CART) 
-SS = function(x, y) {
+SS = function(y, x, requires.x = FALSE) {
   ypred = mean(y)
   sum((y - ypred)^2)
 }
 
 # objective that fits a linear model in the nodes (mob)
-SS_lm = function(x, y) {
+SS_lm = function(y, x, requires.x = TRUE) {
   ypred = predict(lm(y ~ x))
   sum((y - ypred)^2)
 }
 
 # objective for multivariate targets (multivariate tree), see MultivariateRandomForest::Node_cost function
-SS_mah = function(x, y, cov) {
+SS_mah = function(y, x, requires.x = FALSE, cov) {
   center = colMeans(y)
   # cov = cov(y) we need to pass the cov of all data
   sum(mahalanobis(y, center = center, cov = cov, tol = 1e-30))
 }
 
 # Frechet distance FDA measure
-SS_fre = function(x, y) { # slow
+SS_fre = function(y, x, requires.x = FALSE) { # slow
   # using only y-axis of curves is enough as x-axis is always the same for all curves
   require(kmlShape)
   center = colMeans(y)
@@ -60,22 +76,13 @@ SS_fre = function(x, y) { # slow
 }
 
 # Dynamic time warping FDA measure
-SS_dtw = function(x, y) {
+SS_dtw = function(y, x, requires.x = FALSE) {
   require(dtw)
   pdp = colMeans(y) # this is the pdp
   dist = apply(y, 1, function(ice) dtw(ice, pdp, distance.only = TRUE)$normalizedDistance)
   sum(dist)
 }
 ```
-
-# Notes
-
-- This package is not intended to be fast. It serves as a modular framework and playground to explore/study the splitting of features by custom objectives.
-- Splits for categorical variables currently not implemented and tested. Try to handle categoricals as numerics as workaround. 
-- The `perform_split` function computes (and aggregates) the objective in the generated nodes after splitting w.r.t. specific split points.
-- Binary splits generate two nodes and are implemented in `find_best_binary_split`. The implementation  does exhaustive search of split point candidates to find the best split point for a given feature. 
-- Multiple splits generate multiple nodes and are implemented in `find_best_multiway_split`. The implementation currently uses a slow simulated annealing optimization to find the best split point for a given feature (might be improved and replaced with other, faster optimization procedures).
-
 
 # CART with binary splits (constant model in node)
 
@@ -94,7 +101,7 @@ plot(x, y)
 abline(v = unlist(split$split.points))
 ```
 
-# CART with multiple splits (constant model in node)
+# Extending CART to multiple splits (constant model in node)
 
 ```{r}
 y = ifelse(x < pi/2, rnorm(nsim, mean = 0), 
@@ -161,6 +168,7 @@ x6 = rnorm(n, mean = 1, sd = 5)
 y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
 # We also get interesting results using a 2-way interaction of numeric features
 # y = 0.2*x1 - 8*x2 + 8*x6*x2 + eps
+# y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
 
 dat = data.frame(x1, x2, x3, x4, x5, x6, y)
 X = dat[, setdiff(colnames(dat), "y")]
@@ -187,7 +195,8 @@ str(Y) # contains ICE values for each grid point
 
 # compute covariance for data and use this in for mahalanobis distance in the objective
 COV = cov(Y)
-SS_mah2 = function(x, y) SS_mah(x, y, cov = COV)
+SS_mah2 = function(y, x, requires.x = FALSE) 
+  SS_mah(y = y, x = x, requires.x = requires.x, cov = COV)
 sp = split_parent_node(Y = Y, X = X, objective = SS_mah2, 
   n.splits = 1, optimizer = find_best_binary_split)
 sp
@@ -261,3 +270,38 @@ ggplot(plot.data, aes(x = .borders, y = .value)) +
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
+## Group ICE Curves with Multivariate Tree (multiway splits, constant model in node)
+
+Now, we try a non-linear effect with a continous interaction effect.
+
+```{r, eval = FALSE}
+y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
+
+dat = data.frame(x1, x2, x3, x4, x5, x6, y)
+X = dat[, setdiff(colnames(dat), "y")]
+
+# Fit model and compute ICE for x2
+mod = ranger(y ~ ., data = dat, num.trees = 1000)
+pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
+effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
+
+# Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
+ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
+  geom_line(aes(group = .id))
+
+sp_multi = lapply(1:5, function(i) {
+  split_parent_node(Y = Y, X = X, objective = SS_fre, 
+  n.splits = i, optimizer = find_best_multiway_split2, min.node.size = 10)
+})
+
+rbindlist(sp_multi, idcol = "n.splits")
+
+node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multi[[5]])
+str(node_index_multiway_frechet)
+
+plot.data$.split = node_index_multiway_frechet$class[plot.data$.id]
+
+ggplot(plot.data, aes(x = .borders, y = .value)) + 
+  geom_line(aes(group = .id)) + facet_grid(~ .split)
+```

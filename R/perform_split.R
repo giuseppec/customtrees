@@ -16,27 +16,34 @@ perform_split = function(split.points, xval, y, min.node.size, objective) {
 }
 
 perform_split.numeric = function(split.points, xval, y, min.node.size, objective) {
+  # args = formalArgs(objective)
+  # deparse(body(objective))
   # always increasing split points
   # split.points = xval[split.points] # integer optim
-  split.points = sort(split.points)
+  split.points = sort.int(split.points)
   # assign intervalnr. according to split points
-  split.factor = findInterval(x = xval, split.points, rightmost.closed = TRUE)
+  node.number = findInterval(x = xval, split.points, rightmost.closed = TRUE) + 1
   # compute size of each childnode
-  node.size = table(split.factor)
+  node.size = tabulate(node.number)
   # if minimum node size is violated, return Inf
-  if (any(node.size < min.node.size))
+  if (min(node.size) < min.node.size)
     return(Inf)
   # compute objective in each interval and sum it up
-  y.list = split(y, split.factor)
-  x.list = split(xval, split.factor)
+  y.list = split(y, node.number)
+  # x.list only needed if this is used in the objective
+  requires.x = formals(objective)[["requires.x"]]
+  if (isTRUE(requires.x))
+    x.list = split(xval, node.number) else
+      x.list = NULL
+
   res = BBmisc::vnapply(seq_along(y.list), fun = function(i) {
-    objective(x = x.list[[i]], y = y.list[[i]])
+    objective(y = y.list[[i]], x = x.list[[i]])
   })
   sum(res)
 }
 
 # not tested
-perform_split.factor = function(split.points, xval, y, min.node.size, objective) {
+perform_node.number = function(split.points, xval, y, min.node.size, objective) {
   lev = levels(xval)
   xval = as.numeric(xval)
   split.points = which(lev %in% split.points)
@@ -47,13 +54,13 @@ perform_split.factor = function(split.points, xval, y, min.node.size, objective)
 #   # always increasing split points
 #   split.points = sort(split.points)
 #   # assign intervalnr. according to split points
-#   split.factor = findInterval(x, split.points, rightmost.closed = TRUE)
+#   node.number = findInterval(x, split.points, rightmost.closed = TRUE)
 #   # compute size of each childnode
-#   node.size = table(split.factor)
+#   node.size = table(node.number)
 #   # if minimum node size is violated, return Inf
 #   if (any(node.size < min.node.size))
 #     return(Inf)
 #   # compute objective in each interval and sum it up
-#   d = data.table(x, y, split.factor)
-#   sum(d[, .(obj = objective(x, y)), by = split.factor]$obj)
+#   d = data.table(x, y, node.number)
+#   sum(d[, .(obj = objective(x, y)), by = node.number]$obj)
 # }
