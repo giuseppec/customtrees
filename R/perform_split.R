@@ -43,7 +43,7 @@ perform_split.numeric = function(split.points, xval, y, min.node.size, objective
 }
 
 # not tested
-perform_node.number = function(split.points, xval, y, min.node.size, objective) {
+perform_split.factor = function(split.points, xval, y, min.node.size, objective) {
   lev = levels(xval)
   xval = as.numeric(xval)
   split.points = which(lev %in% split.points)

@@ -22,8 +22,13 @@ perform_split0 = function(split.points, xval, y, min.node.size, objective) {
 perform_split1 = function(split.points, xval, y, min.node.size = 10, objective) {
   left.ind = xval < split.points
   # split y space
-  yleft = y[left.ind] # TODO: error handling if vector is empty or contains too few values
-  yright = y[!left.ind] # TODO: error handling if vector is empty or contains too few values
+  if (is.data.frame(y)) {
+    yleft = y[left.ind, ] # TODO: error handling if vector is empty or contains too few values
+    yright = y[!left.ind, ] # TODO: error handling if vector is empty or contains too few values
+  } else {
+    yleft = y[left.ind] # TODO: error handling if vector is empty or contains too few values
+    yright = y[!left.ind] # TODO: error handling if vector is empty or contains too few values
+  }
 
   # split xval space (not required if objective is independend from xval)
   xleft = xval[left.ind]
@@ -46,7 +51,24 @@ perform_split2 = function(split.points, data, feature, target, min.node.size = 1
   if (min(node.size) < min.node.size)
     return(Inf)
   # compute objective in each interval and sum it up
-  sum(data[, .(obj = objective(xval, y)), by = node.number]$obj)
+  sum(data[, .(obj = objective(y = y, x = x)), by = node.number]$obj)
+}
+
+# This is faster for binary splits (but does not work for multiple splits)
+find_best_binary_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
+  objective, ...) {
+  assert_choice(n.splits, choices = 1)
+
+  # use different split candidates to perform split
+  q = generate_split_candidates(xval, use.quantiles = TRUE)
+  splits = BBmisc::vnapply(q, function(i) {
+    perform_split1(i, xval = xval, y = y, min.node.size = min.node.size,
+      objective = objective)
+  })
+  # select the split point yielding the minimal objective
+  best = which.min(splits)
+
+  return(list(split.points = q[best], objective.value = splits[best]))
 }
 
 perform_split3 = function(split.points, xval, y, min.node.size = 10, objective) {
@@ -60,8 +82,8 @@ perform_split3 = function(split.points, xval, y, min.node.size = 10, objective) 
   if (min(node.size) < min.node.size)
     return(Inf)
   # compute objective in each interval and sum it up
-  d = data.table::data.table(x = xval, y = y, node.number = node.number)
-  sum(d[, .(obj = objective(xval, y)), by = node.number]$obj)
+  d = data.table::data.table(x = xval, y = list(y), node.number = node.number)
+  sum(d[, .(obj = objective(y = y, x = x)), by = node.number]$obj)
 }
 nsim = 10000
 set.seed(31415)
