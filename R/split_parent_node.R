@@ -36,3 +36,19 @@ generate_node_index = function(Y, X, result) {
 
   return(list(class = sp, index = split(seq_along(xval), sp)))
 }
+
+create_child_nodes = function(parent_node, parent_split_result) {
+  
+  split.feature = parent_split_result$feature[parent_split_result$best.split]
+  if (length(split.feature) > 1) {
+    # multiple features could provide the best split, select one randomly
+    split.feature = sample(split.feature, 1)
+  } else {
+  }
+  split.value = parent_split_result$split.points[which(parent_split_result$feature == split.feature)]
+  
+  child.1 = parent_node[parent_node[ , split.feature] <= split.value, ]
+  child.2 = parent_node[parent_node[ , split.feature] > split.value, ]
+  
+  return(list(child.1, child.2))
+}
