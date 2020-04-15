@@ -1,6 +1,6 @@
 split_parent_node = function(Y, X, n.splits = 1, min.node.size = 1, optimizer,
   objective, ...) {
-  assert_data_frame(X)
+  # assert_data_frame(X)
   #assert_choice(target.col, choices = colnames(data))
   assert_integerish(n.splits)
   assert_integerish(min.node.size)
@@ -37,18 +37,38 @@ generate_node_index = function(Y, X, result) {
   return(list(class = sp, index = split(seq_along(xval), sp)))
 }
 
-create_child_nodes = function(parent_node, parent_split_result) {
+create_child_nodes = function(parent.node, parent.split.result) {
   
-  split.feature = parent_split_result$feature[parent_split_result$best.split]
+  split.data = get_split_data(parent.split.result)
+  split.feature = split.data[["split.feature"]]
+  split.value = split.data[["split.value"]]
+  
+  parent.node.data = get_node_data(parent.node)
+  parent.node.id = get_node_id(parent.node)
+  
+  child.1.data = parent.node.data[parent.node.data[ , split.feature] <= split.value, ]
+  child.2.data = parent.node.data[parent.node.data[ , split.feature] > split.value, ]
+  child.1 = Node(
+    id = paste0(as.character(parent.node.id), 0),
+    data = child.1.data)
+  child.2 = Node(
+    id = paste0(as.character(parent.node.id), 1),
+    data = child.2.data)
+  
+  return(list("child.1" = child.1, "child.2" = child.2))
+}
+
+get_split_data = function(parent.split.result) {
+  
+  split.feature = parent.split.result$feature[parent.split.result$best.split]
   if (length(split.feature) > 1) {
     # multiple features could provide the best split, select one randomly
     split.feature = sample(split.feature, 1)
   } else {
+    # if only one feature provides the best split, do nothing
   }
-  split.value = parent_split_result$split.points[which(parent_split_result$feature == split.feature)]
+  split.value = parent.split.result$split.points[[
+    which(parent.split.result$feature == split.feature)]]
   
-  child.1 = parent_node[parent_node[ , split.feature] <= split.value, ]
-  child.2 = parent_node[parent_node[ , split.feature] > split.value, ]
-  
-  return(list(child.1, child.2))
+  return(list("split.feature" = split.feature, "split.value" = split.value))
 }
