@@ -1,9 +1,11 @@
 Node = function(id = NULL, data, split.feature = NULL, split.value = NULL,
-                child.left = NULL, child.right = NULL, ame = NULL) {
+                child.left = NULL, child.right = NULL, ame = NULL,
+                ame.sd = NULL, n.observations = NULL) {
   node.values = list(
     "id" = id, "data" = data, "split.feature" = split.feature,
     "split.value" = split.value, "child.left" = child.left,
-    "child.right" = child.right, "ame" = ame)
+    "child.right" = child.right, "ame" = ame, "ame.sd" = ame.sd,
+    "n.observations" = n.observations)
   attr(node.values, "class") = "Node"
   return(node.values)
 }
@@ -34,6 +36,14 @@ get_node_split.value = function(Node.obj) {
 
 get_node_ame = function(Node.obj) {
   Node.obj$ame
+}
+
+get_node_n.observations = function(Node.obj) {
+  Node.obj$n.observations
+}
+
+get_node_ame.sd = function(Node.obj) {
+  Node.obj$ame.sd
 }
 
 set_node_id = function(Node.obj, note.id) {
@@ -67,5 +77,15 @@ set_node_split.value = function(Node.obj, split.value) {
 
 set_node_ame = function(Node.obj, ame) {
   Node.obj$ame = ame
+  return(Node.obj)
+}
+
+set_node_n.observations = function(Node.obj, n.observations) {
+  Node.obj$n.observations = n.observations
+  return(Node.obj)
+}
+
+set_node_ame.sd = function(Node.obj, ame.sd) {
+  Node.obj$ame.sd = ame.sd
   return(Node.obj)
 }
