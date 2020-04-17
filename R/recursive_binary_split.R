@@ -1,14 +1,13 @@
 marginal_effect_tree = function(model, feature, data, step.size, objective) {
   
-  return.list = list()
+  assign("return.list", list(), envir = .GlobalEnv)
   start.node = Node(id = "0", data = data)
   iter.count = 0
+  assign("iter.count", iter.count, envir = .GlobalEnv)
 
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
     this.node = start.node, objective = objective)
-  
-  return(return.list)
 }
 # model = mod
 # feature = "rm"
@@ -23,16 +22,20 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   this.node = set_node_n.observations(this.node, nrow(this.node$data))
   this.node = set_node_ame.sd(this.node, sd(marginals))
   
-  iter.count = get("iter.count", envir = parent.frame())
-  assign("iter.count", iter.count + 1, envir = parent.frame())
-
-  if (sd(marginals) <= 0.5 * abs(mean(marginals)) || nrow(this.node$data) == 2) {
-    # do not split node
-    return.list = get("return.list", envir = parent.frame())
-    assign("return.list", append(return.list, this.node), envir = parent.frame())
+  iter.count = get("iter.count", envir = .GlobalEnv)
+  iter.count = iter.count + 1
+  print(paste("Recursive function call:", iter.count))
+  assign("iter.count", iter.count, envir = .GlobalEnv)
+  
+  if (confidence_interval_sd_ratio(input.vector = marginals, target.ratio = 1)
+      || nrow(this.node$data) <= 4) {
+    # do not split node if 95% of the values within the node are located closer
+    # to mean value than 1 standard deviation
+    return.list = get("return.list", envir = .GlobalEnv)
+    assign("return.list", append(return.list, list(this.node)), envir = .GlobalEnv)
     return(NULL)
   } else {
-    # split node
+    # split node if within-node standard deviation too high
     split.result = split_parent_node(
       Y = marginals, X = this.node$data, objective = objective,
       optimizer = find_best_binary_split)
@@ -53,8 +56,8 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
     this.node = set_node_child.left(this.node, child.node.left$id)
     this.node = set_node_child.right(this.node, child.node.right$id)
     
-    return.list = get("return.list", envir = parent.frame())
-    assign("return.list", append(return.list, this.node), envir = parent.frame())
+    return.list = get("return.list", envir = .GlobalEnv)
+    assign("return.list", append(return.list, list(this.node)), envir = .GlobalEnv)
     
     recursive_binary_split_marginal_effects(
         model = model, feature = feature, step.size = step.size,
