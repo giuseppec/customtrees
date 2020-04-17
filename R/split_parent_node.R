@@ -69,6 +69,9 @@ get_split_data = function(parent.split.result) {
   }
   split.value = parent.split.result$split.points[[
     which(parent.split.result$feature == split.feature)]]
+  objective.value = parent.split.result$objective.value[
+    which(parent.split.result$feature == split.feature)]
   
-  return(list("split.feature" = split.feature, "split.value" = split.value))
+  return(list("split.feature" = split.feature, "split.value" = split.value,
+              "objective.value" = objective.value))
 }
