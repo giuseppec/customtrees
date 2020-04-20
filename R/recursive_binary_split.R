@@ -17,6 +17,10 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   this.node = set_node_ame(this.node, mean(marginals))
   this.node = set_node_n.observations(this.node, nrow(this.node$data))
   this.node = set_node_ame.sd(this.node, sd(marginals))
+  this.node = set_node_split.feature(this.node, NA)
+  this.node = set_node_split.value(this.node, NA)
+  this.node = set_node_child.left(this.node, NA)
+  this.node = set_node_child.right(this.node, NA)
   
   iter.count = get("iter.count", envir = .GlobalEnv)
   iter.count = iter.count + 1
