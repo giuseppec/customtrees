@@ -40,7 +40,7 @@ get_feature_subspace = function(data, split.sequence) {
     } else {
       boundary.left = min(data[[feature]])
     }
-    feature.subspace = paste0("[", boundary.left, ",", boundary.right, "]")
+    feature.subspace = paste0("[", boundary.left, " , ", boundary.right, "]")
     return(feature.subspace)
   })
   names(feature.subspace.list) = split.features
@@ -68,7 +68,7 @@ get_global_subspace = function(data, leaf.nodes) {
     
     feature = colnames(global.subspace)[j]
     feature.range = range(data[[feature]])
-    feature.range =  paste0("[", feature.range[1], ",", feature.range[2], "]")
+    feature.range =  paste0("[", feature.range[1], " , ", feature.range[2], "]")
     for (i in 1:nrow(global.subspace)) {
       obs = global.subspace[i, feature]
       if (is.na(obs)) {
