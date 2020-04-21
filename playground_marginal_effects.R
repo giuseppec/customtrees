@@ -37,7 +37,8 @@ objective.function = function(x, y, requires.x = FALSE) {
 }
 
 marginal_effect_tree(model = mod, feature = "rm", data = data,
-                                step.size = 1, SS)
+                                step.size = 1, objective = SS,
+                    target.ratio.sd.mean = 0.25)
 return.list
 
 tree.summary = tree_summary(return.list)
@@ -86,5 +87,10 @@ leaf.nodes = get_leaf_nodes(tree.summary)
     
 leaf.nodes
 subspace = get_global_subspace(data = data, leaf.nodes = leaf.nodes)
+leaf.largest = subspace[as.numeric(as.character(subspace$n.observations)) == max(as.numeric(as.character(subspace$n.observations))), ]
+
+save(leaf.largest, file = "ame_subspace_largest.Rdata")
+
+str(subspace)
 head(subspace)
 save(subspace, file = "ame_subspace.Rdata")

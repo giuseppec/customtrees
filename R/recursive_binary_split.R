@@ -1,4 +1,4 @@
-marginal_effect_tree = function(model, feature, data, step.size, objective) {
+marginal_effect_tree = function(model, feature, data, step.size, objective, target.ratio.sd.mean) {
   
   assign("return.list", list(), envir = .GlobalEnv)
   start.node = Node(id = "0", data = data)
@@ -7,11 +7,11 @@ marginal_effect_tree = function(model, feature, data, step.size, objective) {
 
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
-    this.node = start.node, objective = objective)
+    this.node = start.node, objective = objective, target.ratio.sd.mean = target.ratio.sd.mean)
 }
 
 recursive_binary_split_marginal_effects = function(model, feature, step.size,
-                                                   this.node, objective) {
+                                                   this.node, objective, target.ratio.sd.mean) {
  
   marginals = marginal_effects(model, this.node$data, feature, step.size)
   this.node = set_node_ame(this.node, mean(marginals))
@@ -27,7 +27,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   print(paste("Recursive function call:", iter.count))
   assign("iter.count", iter.count, envir = .GlobalEnv)
   
-  if (confidence_interval_sd_ratio(input.vector = marginals, target.ratio = 1)
+  if (confidence_interval_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)
       || nrow(this.node$data) <= 4) {
     # do not split node if 95% of the values within the node are located closer
     # to mean value than 1 standard deviation
@@ -40,7 +40,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
     # split node if within-node standard deviation too high
     split.result = split_parent_node(
       Y = marginals, X = this.node$data, objective = objective,
-      optimizer = find_best_binary_split, min.node.size = 10)
+      optimizer = find_best_binary_split, min.node.size = 1)
   }
   
   if (nrow(split.result) == 0) {
@@ -69,10 +69,12 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
-    this.node = child.node.left, objective = objective)
+    this.node = child.node.left, objective = objective,
+    target.ratio.sd.mean = target.ratio.sd.mean)
   
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
-    this.node = child.node.right, objective = objective)
+    this.node = child.node.right, objective = objective,
+    target.ratio.sd.mean = target.ratio.sd.mean)
 }
 

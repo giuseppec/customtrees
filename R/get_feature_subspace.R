@@ -79,6 +79,7 @@ get_global_subspace = function(data, leaf.nodes) {
   }
   
   global.subspace = as.data.frame(global.subspace)
-  global.subspace = data.frame(cbind(leaf.nodes, global.subspace))
+  global.subspace = cbind.data.frame(leaf.nodes, global.subspace)
+  
   return(global.subspace)
 }
