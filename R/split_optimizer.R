@@ -5,10 +5,10 @@ find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1,
 
   # use different split candidates to perform split
   q = generate_split_candidates(xval, use.quantiles = TRUE)
-  splits = BBmisc::vnapply(q, function(i) {
+  splits = vapply(q, FUN = function(i) {
     perform_split(i, xval = xval, y = y, min.node.size = min.node.size,
       objective = objective)
-  })
+  }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
   # select the split point yielding the minimal objective
   best = which.min(splits)
 

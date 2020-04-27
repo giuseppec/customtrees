@@ -58,7 +58,9 @@ SS_lm = function(y, x, requires.x = TRUE) {
 }
 
 # objective for multivariate targets (multivariate tree), see MultivariateRandomForest::Node_cost function
-SS_mah = function(y, x, requires.x = FALSE, cov) {
+SS_mah = function(y, x, requires.x = FALSE, cov = NULL) {
+  if (is.null(cov))
+    cov = cov(y)
   center = colMeans(y)
   # cov = cov(y) we need to pass the cov of all data
   sum(mahalanobis(y, center = center, cov = cov, tol = 1e-30))
@@ -114,7 +116,7 @@ split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_s
 
 # MA-LS Chains optimization from find_best_multiway_split2 (claimed to be faster and better)
 split2 = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split2, 
-  n.splits = 2, control = malschains.control(istep = 100, ls = "sw"))
+  n.splits = 2)
 
 split
 split2
@@ -140,8 +142,7 @@ abline(v = unlist(split$split.points))
 ```{r}
 y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 
-split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split2, 
-  n.splits = 3, control = malschains.control(istep = 100, ls = "sw"))
+split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split2, n.splits = 3)
 split
 
 plot(x, y)
@@ -165,10 +166,10 @@ eps = rnorm(n, 0, 1)
 x5 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
 x6 = rnorm(n, mean = 1, sd = 5)
 
-y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
+# y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
 # We also get interesting results using a 2-way interaction of numeric features
-# y = 0.2*x1 - 8*x2 + 8*x6*x2 + eps
-# y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
+#y = 0.2*x1 - 8*x2 + 8*x6*x2 + eps
+y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
 
 dat = data.frame(x1, x2, x3, x4, x5, x6, y)
 X = dat[, setdiff(colnames(dat), "y")]
@@ -203,6 +204,7 @@ sp
 node_index = generate_node_index(Y, X, result = sp)
 str(node_index)
 
+Y = as.data.table(Y)
 # frechet distance yields same splits but is a bit slower
 sp_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre,
   n.splits = 1, optimizer = find_best_binary_split)
@@ -244,7 +246,7 @@ This is because the curve structure along the x-axis is not considered in the di
 
 ```{r}
 sp_multiway = split_parent_node(Y = Y, X = X, objective = SS_mah2, 
-  n.splits = 2, optimizer = find_best_multiway_split2)
+  n.splits = 5, optimizer = find_best_multiway_split2)
 sp_multiway
 node_index_multiway = generate_node_index(Y, X, result = sp_multiway)
 str(node_index_multiway)
@@ -259,7 +261,7 @@ Instead, using a distance measure that is suited for curves (e.g., frechet dista
 
 ```{r}
 sp_multiway_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = 2, optimizer = find_best_multiway_split2)
+  n.splits = 5, optimizer = find_best_multiway_split2)
 sp_multiway_frechet
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multiway_frechet)
 str(node_index_multiway_frechet)

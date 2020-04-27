@@ -36,9 +36,9 @@ perform_split.numeric = function(split.points, xval, y, min.node.size, objective
     x.list = split(xval, node.number) else
       x.list = NULL
 
-  res = BBmisc::vnapply(seq_along(y.list), fun = function(i) {
+  res = vapply(seq_along(y.list), FUN = function(i) {
     objective(y = y.list[[i]], x = x.list[[i]])
-  })
+  }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
   sum(res)
 }
 

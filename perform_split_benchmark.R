@@ -1,3 +1,12 @@
+SS_fre2 = function(y, x, requires.x = FALSE) { # slow
+  # using only y-axis of curves is enough as x-axis is always the same for all curves
+  require(kmlShape)
+  center = colMeans(y)
+  grid.x = as.numeric(names(center))
+  pdp.y = unname(center)
+  sum(y[, .(dist = distFrechet(grid.x, pdp.y, grid.x, .SD)), by = 1:nrow(y)]$dist)
+}
+
 perform_split0 = function(split.points, xval, y, min.node.size, objective) {
   # always increasing split points
   # split.points = xval[split.points] # integer optim
@@ -62,7 +71,7 @@ find_best_binary_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
   # use different split candidates to perform split
   q = generate_split_candidates(xval, use.quantiles = TRUE)
   splits = BBmisc::vnapply(q, function(i) {
-    perform_split1(i, xval = xval, y = y, min.node.size = min.node.size,
+    perform_split3(i, xval = xval, y = y, min.node.size = min.node.size,
       objective = objective)
   })
   # select the split point yielding the minimal objective
