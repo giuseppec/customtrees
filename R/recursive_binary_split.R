@@ -1,7 +1,7 @@
 marginal_effect_tree = function(model, feature, data, step.size, objective, target.ratio.sd.mean) {
   
   assign("return.list", list(), envir = .GlobalEnv)
-  start.node = Node(id = "0", data = data)
+  start.node = Node(id = "1", "parent.node" = NA, "depth" = 1, data = data)
   iter.count = 0
   assign("iter.count", iter.count, envir = .GlobalEnv)
 
@@ -29,8 +29,6 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   
   if (confidence_interval_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)
       || nrow(this.node$data) <= 4) {
-    # do not split node if 95% of the values within the node are located closer
-    # to mean value than 1 standard deviation
     return.list = get("return.list", envir = .GlobalEnv)
     assign(
       "return.list", append(return.list, list(this.node)), envir = .GlobalEnv)
@@ -55,7 +53,9 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   
   child.nodes = create_child_nodes(this.node, split.result)
   child.node.left = child.nodes[["child.1"]]
+  child.node.left = set_node_parent.node(child.node.left, parent.node = this.node$id)
   child.node.right = child.nodes[["child.2"]]
+  child.node.right = set_node_parent.node(child.node.right, parent.node = this.node$id)
   
   this.node = set_node_split.feature(
     this.node, get_split_data(split.result)[["split.feature"]])

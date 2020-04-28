@@ -47,12 +47,21 @@ create_child_nodes = function(parent.node, parent.split.result) {
   parent.node.id = get_node_id(parent.node)
   
   child.1.data = parent.node.data[parent.node.data[ , split.feature] <= split.value, ]
+  child.1.id = paste0(as.character(parent.node.id), 0)
+  child.1.depth = unlist(lapply(strsplit(child.1.id, ""), FUN = length))
+  
   child.2.data = parent.node.data[parent.node.data[ , split.feature] > split.value, ]
+  child.2.id = paste0(as.character(parent.node.id), 1)
+  child.2.depth = unlist(lapply(strsplit(child.2.id, ""), FUN = length))
+  
   child.1 = Node(
-    id = paste0(as.character(parent.node.id), 0),
+    id = child.1.id,
+    depth = child.1.depth,
     data = child.1.data)
+  
   child.2 = Node(
-    id = paste0(as.character(parent.node.id), 1),
+    id = child.2.id,
+    depth = child.2.depth,
     data = child.2.data)
   
   return(list("child.1" = child.1, "child.2" = child.2))

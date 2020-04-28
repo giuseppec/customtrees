@@ -45,6 +45,42 @@ return.list
 tree.summary = tree_summary(return.list)
 leaf.nodes = get_leaf_nodes(tree.summary)
 
+####
+
+features = colnames(Boston)
+party.node.list = list()
+
+
+  ##
+  
+
+party.tree = party_interface(tree.summary, Boston)
+plot(party.tree)  
+autoplot(party.tree)
+  
+# node = tree.summary[tree.summary$id == nodes.parent, ]
+  # node.id = as.numeric(as.character(node$id))
+  # depth = node$depth
+  
+  node.split.feature = node$split.feature
+  node.split.feature.id = which(features == node.split.feature)
+  node.split.value = node$split.value
+  
+  party.node.1 = partynode(node.id, split = partysplit(node.split.feature.id, breaks = node.split.value),
+            kids = party.nodes)
+  
+  #
+  
+  
+  ####
+  
+  
+  
+}
+
+
+
+####
 # child.nodes = lapply(return.list, FUN = function(x) {
   # if (is.null(x[["child.left"]]) && is.null(x[["child.right"]])) {
     # return(x)}
@@ -89,6 +125,6 @@ leaf.nodes = get_leaf_nodes(tree.summary)
 leaf.nodes
 subspace = get_global_subspace(data = data, leaf.nodes = leaf.nodes)
 leaf.largest = subspace[as.numeric(as.character(subspace$n.observations)) == max(as.numeric(as.character(subspace$n.observations))), ]
-
-save(leaf.largest, file = "ame_subspace_largest.Rdata")
-save(subspace, file = "ame_subspace.Rdata")
+# 
+# save(leaf.largest, file = "ame_subspace_largest.Rdata")
+# save(subspace, file = "ame_subspace.Rdata")

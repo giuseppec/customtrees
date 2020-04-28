@@ -1,9 +1,9 @@
-Node = function(id = NULL, data, split.feature = NULL, split.value = NULL,
-                child.left = NULL, child.right = NULL, ame = NULL,
+Node = function(id = NULL, depth = NULL, data, split.feature = NULL, split.value = NULL,
+                parent.node = NULL, child.left = NULL, child.right = NULL, ame = NULL,
                 ame.sd = NULL, n.observations = NULL) {
   node.values = list(
-    "id" = id, "data" = data, "split.feature" = split.feature,
-    "split.value" = split.value, "child.left" = child.left,
+    "id" = id, "depth" = depth, "data" = data, "split.feature" = split.feature,
+    "split.value" = split.value, "parent.node" = parent.node, "child.left" = child.left,
     "child.right" = child.right, "ame" = ame, "ame.sd" = ame.sd,
     "n.observations" = n.observations)
   attr(node.values, "class") = "Node"
@@ -14,8 +14,16 @@ get_node_id = function(Node.obj) {
   Node.obj$id
 }
 
+get_node_depth = function(Node.obj) {
+  Node.obj$depth
+}
+
 get_node_data = function(Node.obj) {
   Node.obj$data
+}
+
+get_node_parent.node = function(Node.obj) {
+  Node.obj$parent.node
 }
 
 get_node_child.left = function(Node.obj) {
@@ -46,15 +54,26 @@ get_node_ame.sd = function(Node.obj) {
   Node.obj$ame.sd
 }
 
-set_node_id = function(Node.obj, note.id) {
-  Node.obj$id = note.id
+set_node_id = function(Node.obj, node.id) {
+  Node.obj$id = node.id
   return(Node.obj)
 }
 
-set_node_data = function(Node.obj, note.data) {
-  Node.obj$data = note.data
+set_node_depth = function(Node.obj, node.depth) {
+  Node.obj$depth = node.depth
   return(Node.obj)
 }
+
+set_node_data = function(Node.obj, node.data) {
+  Node.obj$data = node.data
+  return(Node.obj)
+}
+
+set_node_parent.node = function(Node.obj, parent.node) {
+  Node.obj$parent.node = parent.node
+  return(Node.obj)
+}
+
 set_node_child.left = function(Node.obj, child.left) {
   Node.obj$child.left = child.left
   return(Node.obj)
