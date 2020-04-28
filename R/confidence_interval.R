@@ -10,6 +10,6 @@
 #   }
 # }
 
-confidence_interval_sd_ratio = function(input.vector, target.ratio) {
+absolute_mean_sd_ratio = function(input.vector, target.ratio) {
   return(sd(input.vector) / abs(mean(input.vector)) <= target.ratio)
 }

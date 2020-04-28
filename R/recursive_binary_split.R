@@ -27,7 +27,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   print(paste("Recursive function call:", iter.count))
   assign("iter.count", iter.count, envir = .GlobalEnv)
   
-  if (confidence_interval_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)
+  if (absolute_mean_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)
       || nrow(this.node$data) <= 4) {
     return.list = get("return.list", envir = .GlobalEnv)
     assign(
@@ -38,7 +38,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
     # split node if within-node standard deviation too high
     split.result = split_parent_node(
       Y = marginals, X = this.node$data, objective = objective,
-      optimizer = find_best_binary_split, min.node.size = 1)
+      optimizer = find_best_binary_split, min.node.size = 2)
   }
   
   if (nrow(split.result) == 0) {

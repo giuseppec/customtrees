@@ -1,12 +1,13 @@
 
 party_interface = function(tree.summary, data) {
-  
+  features = colnames(data)
   party.node.list = list()
   depth = max(tree.summary$depth)
   nodes = tree.summary[which(tree.summary$depth == depth), ]
   nodes.id = as.numeric(as.character(nodes$id))
+
   party.nodes = lapply(nodes.id, FUN = function(node) {
-    partynode(node)
+    partynode(id = node)
   })
   party.node.list = append(party.node.list, party.nodes)
   depth = depth - 1
@@ -30,7 +31,8 @@ party_interface = function(tree.summary, data) {
         if (node.id == x.parent) {
           return(x)
         } else {
-        }})
+        }
+      })
       
       child.party.nodes = child.party.nodes[!unlist(lapply(child.party.nodes, is.null))]
       # drop NULL values
@@ -65,3 +67,4 @@ party_interface = function(tree.summary, data) {
   party.tree = party(party.tree, data)
   return(party.tree)
 }
+

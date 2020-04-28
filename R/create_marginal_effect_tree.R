@@ -16,8 +16,8 @@ tree_summary = function(tree) {
  
   tree.summary$depth = as.numeric(as.character(tree.summary$depth))
   tree.summary$split.value = as.numeric(as.character(tree.summary$split.value))
-  tree.summary$ame = as.numeric(as.character(tree.summary$ame))
-  tree.summary$ame.sd = as.numeric(as.character(tree.summary$ame.sd))
+  tree.summary$ame = round(as.numeric(as.character(tree.summary$ame)), 2)
+  tree.summary$ame.sd = round(as.numeric(as.character(tree.summary$ame.sd)), 2)
   
   
   return(tree.summary)
