@@ -1,4 +1,5 @@
-marginal_effect_tree = function(model, feature, data, step.size, objective, target.ratio.sd.mean) {
+marginal_effect_tree = function(model, feature, data, step.size, objective, target.ratio.sd.mean,
+                                min.node.size) {
   
   assign("return.list", list(), envir = .GlobalEnv)
   start.node = Node(id = "1", "parent.node" = NA, "depth" = 1, data = data)
@@ -7,11 +8,13 @@ marginal_effect_tree = function(model, feature, data, step.size, objective, targ
 
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
-    this.node = start.node, objective = objective, target.ratio.sd.mean = target.ratio.sd.mean)
+    this.node = start.node, objective = objective, target.ratio.sd.mean = target.ratio.sd.mean,
+    min.node.size = min.node.size)
 }
 
 recursive_binary_split_marginal_effects = function(model, feature, step.size,
-                                                   this.node, objective, target.ratio.sd.mean) {
+                                                   this.node, objective, target.ratio.sd.mean,
+                                                   min.node.size) {
  
   marginals = marginal_effects(model, this.node$data, feature, step.size)
   this.node = set_node_ame(this.node, mean(marginals))
@@ -27,8 +30,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   print(paste("Recursive function call:", iter.count))
   assign("iter.count", iter.count, envir = .GlobalEnv)
   
-  if (absolute_mean_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)
-      || nrow(this.node$data) <= 4) {
+  if (absolute_mean_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)) {
     return.list = get("return.list", envir = .GlobalEnv)
     assign(
       "return.list", append(return.list, list(this.node)), envir = .GlobalEnv)
@@ -38,7 +40,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
     # split node if within-node standard deviation too high
     split.result = split_parent_node(
       Y = marginals, X = this.node$data, objective = objective,
-      optimizer = find_best_binary_split, min.node.size = 2)
+      optimizer = find_best_binary_split, min.node.size = min.node.size)
   }
   
   if (nrow(split.result) == 0) {
@@ -52,9 +54,9 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   }
   
   child.nodes = create_child_nodes(this.node, split.result)
-  child.node.left = child.nodes[["child.1"]]
+  child.node.left = child.nodes[["child.left"]]
   child.node.left = set_node_parent.node(child.node.left, parent.node = this.node$id)
-  child.node.right = child.nodes[["child.2"]]
+  child.node.right = child.nodes[["child.right"]]
   child.node.right = set_node_parent.node(child.node.right, parent.node = this.node$id)
   
   this.node = set_node_split.feature(
@@ -70,11 +72,11 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
     this.node = child.node.left, objective = objective,
-    target.ratio.sd.mean = target.ratio.sd.mean)
+    target.ratio.sd.mean = target.ratio.sd.mean, min.node.size = min.node.size)
   
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
     this.node = child.node.right, objective = objective,
-    target.ratio.sd.mean = target.ratio.sd.mean)
+    target.ratio.sd.mean = target.ratio.sd.mean, min.node.size = min.node.size)
 }
 

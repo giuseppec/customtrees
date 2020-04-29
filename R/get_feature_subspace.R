@@ -1,5 +1,5 @@
 record_split_sequence = function(tree, leaf.id) {
-  
+
   id.split = unlist(strsplit(x = leaf.id, split = "", fixed = TRUE))
   split.list = list()
   id = character(1)
@@ -49,8 +49,8 @@ get_feature_subspace = function(data, split.sequence) {
 }
 
 get_global_subspace = function(data, leaf.nodes) {
-  
-  feature.subspaces = lapply(leaf.nodes$id, FUN = function(id) {
+  leaf.nodes.id = as.character(leaf.nodes$id)
+  feature.subspaces = lapply(leaf.nodes.id, FUN = function(id) {
     split.sequence = record_split_sequence(tree = tree.summary, leaf.id = id)
     feature.subspace.list = get_feature_subspace(data, split.sequence)
     return(feature.subspace.list)
