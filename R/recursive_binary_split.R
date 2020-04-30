@@ -1,4 +1,4 @@
-marginal_effect_tree = function(model, feature, data, step.size, objective, target.ratio.sd.mean,
+marginal_effect_tree = function(model, feature, data, step.size, objective, target.objective,
                                 min.node.size) {
   
   assign("return.list", list(), envir = .GlobalEnv)
@@ -8,16 +8,19 @@ marginal_effect_tree = function(model, feature, data, step.size, objective, targ
 
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
-    this.node = start.node, objective = objective, target.ratio.sd.mean = target.ratio.sd.mean,
+    this.node = start.node, objective = objective, target.objective = target.objective,
     min.node.size = min.node.size)
 }
 
+
 recursive_binary_split_marginal_effects = function(model, feature, step.size,
-                                                   this.node, objective, target.ratio.sd.mean,
+                                                   this.node, objective, target.objective,
                                                    min.node.size) {
  
-  marginals = marginal_effects(model, this.node$data, feature, step.size)
+  marginals = marginal_effects(
+    model = model, data = this.node$data, feature = feature, step.size = step.size)
   this.node = set_node_ame(this.node, mean(marginals))
+  print(paste0(this.node$id, "; ", mean(marginals)))
   this.node = set_node_n.observations(this.node, nrow(this.node$data))
   this.node = set_node_ame.sd(this.node, sd(marginals))
   this.node = set_node_split.feature(this.node, NA)
@@ -30,7 +33,7 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   print(paste("Recursive function call:", iter.count))
   assign("iter.count", iter.count, envir = .GlobalEnv)
   
-  if (absolute_mean_sd_ratio(input.vector = marginals, target.ratio = target.ratio.sd.mean)) {
+  if (objective(y = marginals, x = NULL) == target.objective) {
     return.list = get("return.list", envir = .GlobalEnv)
     assign(
       "return.list", append(return.list, list(this.node)), envir = .GlobalEnv)
@@ -72,11 +75,11 @@ recursive_binary_split_marginal_effects = function(model, feature, step.size,
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
     this.node = child.node.left, objective = objective,
-    target.ratio.sd.mean = target.ratio.sd.mean, min.node.size = min.node.size)
+    target.objective = target.objective, min.node.size = min.node.size)
   
   recursive_binary_split_marginal_effects(
     model = model, feature = feature, step.size = step.size,
     this.node = child.node.right, objective = objective,
-    target.ratio.sd.mean = target.ratio.sd.mean, min.node.size = min.node.size)
+    target.objective = target.objective, min.node.size = min.node.size)
 }
 
