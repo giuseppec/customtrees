@@ -95,7 +95,7 @@ p = ggparty(party.tree, add_vars = list("ame" =
   geom_node_splitvar() +
   # geom_node_info() + 
   geom_node_label(aes(label = info, color = target.objective), ids = "terminal", size = 3, nudge_y = -0.1) +
-  geom_node_plot(gglist = list(geom_boxplot(aes(x = marginal.effect)),
+  geom_node_plot(gglist = list(geom_boxplot(mapping = aes(x = marginal.effect)),
                                xlab("Marginal Effects"),
                                theme_bw(),
                                coord_flip(),
@@ -106,10 +106,51 @@ p = ggparty(party.tree, add_vars = list("ame" =
   theme(legend.position = "bottom",
         plot.title = element_text(hjust = 0.5)) +
   scale_color_discrete("Objective target value achieved") +
-  ggtitle("Subspace Average Marginal Effects of Feature 'rm' with Step Size 1")
+  ggtitle("Subspace average marginal effects of feature 'rm' with step size 1.")
+###
+
+
+p = ggparty(party.tree, add_vars = list("ame" =
+                                          function(data, node) {
+                                            mean(node$data$marginal.effect)
+                                          },
+                                        "sd" =
+                                          function(data, node) {
+                                            sd(node$data$marginal.effect)
+                                          },
+                                        "variation.coefficient" =
+                                          function(data, node) {
+                                            sd(node$data$marginal.effect) / abs(mean(node$data$marginal.effect))
+                                          },
+                                        "target.objective" =
+                                          function(data, node) {
+                                            sd(node$data$marginal.effect) / abs(mean(node$data$marginal.effect)) < 0.5
+                                          })) +
+  geom_edge() +
+  geom_edge_label() +
+  geom_node_splitvar() +
+  # geom_node_info() + 
+  geom_node_label(aes(label = info, color = target.objective), ids = "terminal", size = 3, nudge_y = -0.1) +
+  geom_node_plot(gglist = list(geom_violin(mapping = aes(x = 0, y = marginal.effect, )),
+                               ylab("Marginal effects"),
+                               theme_bw(),
+                               theme(
+                                 axis.title.x = element_blank(),
+                                 axis.text.x = element_blank(),
+                                 axis.ticks.x = element_blank())),
+                 nudge_y = -0.15,
+                 shared_axis_labels = TRUE) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5)) +
+  scale_color_discrete("Objective target value achieved") +
+  ggtitle("Subspace average marginal effects of feature 'rm' with step size 1.")
+
 
 p
 
+
+ggplot(party.tree[[1]]$data) +
+  geom_violin(aes(y = marginal.effect, x = marginal.effect))
 
 subspace = get_global_subspace(data = Boston, leaf.nodes = leaf.nodes)
 # leaf.largest = subspace[as.numeric(as.character(subspace$n.observations)) == max(as.numeric(as.character(subspace$n.observations))), ]
