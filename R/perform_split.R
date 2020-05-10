@@ -15,7 +15,10 @@ perform_split = function(split.points, xval, y, min.node.size, objective) {
   UseMethod("perform_split")
 }
 
-perform_split.numeric = function(split.points, xval, y, min.node.size, objective) {
+# TODO: perform_split.numeric 
+perform_split = function(split.points, xval, y, min.node.size, dist.between, lambda, objective) {
+  
+  
   # args = formalArgs(objective)
   # deparse(body(objective))
   # always increasing split points
@@ -35,32 +38,58 @@ perform_split.numeric = function(split.points, xval, y, min.node.size, objective
   if (isTRUE(requires.x))
     x.list = split(xval, node.number) else
       x.list = NULL
-
+  
   res = vapply(seq_along(y.list), FUN = function(i) {
     objective(y = y.list[[i]], x = x.list[[i]])
   }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
-  sum(res)
+  
+  # calculate cluster PDPs
+  pdp_clust = sapply(seq_along(y.list), FUN = function(i) {
+    colMeans(y.list[[i]])
+  }, USE.NAMES = FALSE)
+  
+  
+  # if regularization chosen to be "fre", then objective is adjusted accordingly (described in test_regularizationOfObjective.R)
+  if (dist.between=="fre"){
+    if (is.null(lambda)){
+      lambda = 0.2
+    }
+    SS_betw = dist_fre(y=Y, x = xval, pdp = pdp_clust)
+    return(sum(res) + lambda * sum(res)/(SS_betw/(length(split.points))))
+  }
+  # if regularization (dist.between) chosen to be "sd" adjustments of objective as described in test file
+  else if (dist.between=="sd"){
+    if (is.null(lambda)){
+      lambda = 0.025
+    }
+    SD_dev = dist_sd(y=Y, x = x.list, pdp = pdp_clust)
+    return(sum(res) + lambda * sum(res)/SD_dev)
+  }
+  
 }
 
-# not tested
-perform_split.factor = function(split.points, xval, y, min.node.size, objective) {
-  lev = levels(xval)
-  xval = as.numeric(xval)
-  split.points = which(lev %in% split.points)
-  perform_split.numeric(xval = xval, split.points = split.points, y = y, min.node.size = min.node.size, objective = objective)
+
+# distance measure for regularization method "fre"
+dist_fre = function(y, x, pdp, requires.x = FALSE) { # slow
+  # using only y-axis of curves is enough as x-axis is always the same for all curves
+  require(kmlShape)
+  center = colMeans(y)
+  grid.x = as.numeric(names(center))
+  pdp.y = unname(center)
+  dist = apply(pdp, 2, function(ice) distFrechet(grid.x, pdp.y, grid.x, ice, FrechetSumOrMax = "sum"))
+  sum(dist)
 }
 
-# perform_split2 = function(split.points, x, y, min.node.size = 10, objective) {
-#   # always increasing split points
-#   split.points = sort(split.points)
-#   # assign intervalnr. according to split points
-#   node.number = findInterval(x, split.points, rightmost.closed = TRUE)
-#   # compute size of each childnode
-#   node.size = table(node.number)
-#   # if minimum node size is violated, return Inf
-#   if (any(node.size < min.node.size))
-#     return(Inf)
-#   # compute objective in each interval and sum it up
-#   d = data.table(x, y, node.number)
-#   sum(d[, .(obj = objective(x, y)), by = node.number]$obj)
-# }
+# distance measure for regularization method "sd"
+dist_sd = function(y, x, pdp, requires.x = TRUE) { # slow
+  # using only y-axis of curves is enough as x-axis is always the same for all curves
+  require(kmlShape)
+  center = colMeans(y)
+  grid.x = as.numeric(names(center))
+  pdp.y = unname(center)
+  sd_sub = apply(pdp, 2, function(pdp_clust) sd(pdp_clust))
+  weights = sapply(x, function(var) length(var))
+  #weights = weights/sum(weights)
+  abs(weighted.mean(sd_sub, w = unname(weights))-sd(pdp.y))
+}
+

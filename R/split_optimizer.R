@@ -1,12 +1,12 @@
 # This is faster for binary splits (but does not work for multiple splits)
-find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1,
+find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1, dist.between = "fre", lambda = NULL,
   objective, ...) {
   assert_choice(n.splits, choices = 1)
 
   # use different split candidates to perform split
   q = generate_split_candidates(xval, use.quantiles = TRUE)
   splits = vapply(q, FUN = function(i) {
-    perform_split(i, xval = xval, y = y, min.node.size = min.node.size,
+    perform_split(i, xval = xval, y = y, min.node.size = min.node.size, dist.between = dist.between, lambda = lambda,
       objective = objective)
   }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
   # select the split point yielding the minimal objective
@@ -16,7 +16,7 @@ find_best_binary_split = function(xval, y, n.splits = 1, min.node.size = 1,
 }
 
 # Optimization with simulated annealing: finds best split points and returns value of objective function
-find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1,
+find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1, dist.between = "fre", lambda = NULL,
   objective, control = NULL, ...) {
   unique.x = length(unique(xval))
   # max. number of splits to be performed must be unique.x-1
@@ -24,7 +24,7 @@ find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1,
     n.splits = unique.x - 1
   # if only one split is needed, we use exhaustive search
   if (n.splits == 1)
-    return(find_best_binary_split(xval, y, n.splits = n.splits, min.node.size = min.node.size,
+    return(find_best_binary_split(xval, y, n.splits = n.splits, min.node.size = min.node.size, dist.between = dist.between, lambda = lambda,
       objective = objective))
 
   # sample split points from observed x values as candidates in optimization procedure
@@ -43,7 +43,7 @@ find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1,
   # use simulated annealing to find optimal split points
   init = rep(0, n.splits)
   best = optim(init, fn = perform_split,
-    xval = xval, y = y, min.node.size = min.node.size,
+    xval = xval, y = y, min.node.size = min.node.size, dist.between = dist.between, lambda = lambda,
     objective = objective,
     method = "SANN", gr = gr, ...)
 
@@ -51,7 +51,7 @@ find_best_multiway_split = function(xval, y, n.splits = 1, min.node.size = 1,
 }
 
 # Optimization with MA-LS Chains: finds best split points and returns value of objective function
-find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
+find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1, dist.between = "fre", lambda = NULL,
   objective, control = NULL, ...) {
   unique.x = length(unique(xval))
   # max. number of splits to be performed must be unique.x-1
@@ -59,7 +59,7 @@ find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
     n.splits = unique.x - 1
   # if only one split is needed, we use exhaustive search
   if (n.splits == 1)
-    return(find_best_binary_split(xval, y, n.splits = n.splits,
+    return(find_best_binary_split(xval, y, n.splits = n.splits, dist.between = dist.between, lambda = lambda,
       min.node.size = min.node.size, objective = objective))
 
   # generate initial population
@@ -79,7 +79,7 @@ find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
 
   # optimization function
   .perform_split = function(par)
-    perform_split(split.points = par, xval = xval, y = y, min.node.size = min.node.size,
+    perform_split(split.points = par, xval = xval, y = y, min.node.size = min.node.size, dist.between = dist.between, lambda = lambda,
       objective = objective)
   best = Rmalschains::malschains(.perform_split, lower = lower, upper = upper,
     initialpop = pop, verbosity = 0, control = control, ...) #   control = malschains.control(istep = 300, ls = "sw"),

@@ -1,4 +1,4 @@
-split_parent_node = function(Y, X, n.splits = 1, min.node.size = 1, optimizer,
+split_parent_node = function(Y, X, n.splits = 1, min.node.size = 1, optimizer, dist.between = "fre", lambda = NULL,
   objective, ...) {
   assert_data_frame(X)
   #assert_choice(target.col, choices = colnames(data))
@@ -9,7 +9,7 @@ split_parent_node = function(Y, X, n.splits = 1, min.node.size = 1, optimizer,
 
   # find best split points per feature
   opt.feature = lapply(X, function(feat) {
-    optimizer(x = feat, y = Y, n.splits = n.splits, min.node.size = min.node.size,
+    optimizer(x = feat, y = Y, n.splits = n.splits, min.node.size = min.node.size, dist.between = dist.between, lambda = lambda,
       objective = objective, ...)
   })
 
