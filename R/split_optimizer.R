@@ -64,7 +64,7 @@ find_best_multiway_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
 
   # generate initial population
   xval.candidates = generate_split_candidates(xval, use.quantiles = FALSE)
-  pop = replicate(n.splits, sample(xval.candidates, size = min(n.splits*10, unique.x)))
+  pop = replicate(n.splits, sample(xval.candidates, size = min(n.splits*10, length(xval.candidates))))
   pop = unique(pop)
 
   # replace maximum number of evaluations depending of number of unique x values
