@@ -73,11 +73,11 @@ perform_split = function(split.points, feat, x, xval, y, min.node.size, objectiv
   # split y according to node.number
   y.list = split(y, node.number)
   # use only ice curves that are available for the combination of the two features -> no extrapolation
-  y.list.filtered = sapply(seq_along(unique(node.number)), FUN = function(i) {
+  y.list.filtered = lapply(seq_along(unique(node.number)), FUN = function(i) {
     sub_number = which(node.number==i)
     ind = filter(feat, x, y, sub_number)
-    y.list[[i]] = y.list[[i]][,ind]
-  }, USE.NAMES = FALSE)
+    y.list[[i]][,ind]
+  })
   # x.list only needed if this is used in the objective
   requires.x = formals(objective)[["requires.x"]]
   if (isTRUE(requires.x))
@@ -108,8 +108,73 @@ find_best_binary_split = function(feat, x, xval, y, n.splits = 1, min.node.size 
   ice = perform_split(q[best], feat = feat, x = x, xval = xval, y = y, min.node.size = min.node.size, 
                 objective = objective)[[2]]
   
-  return(list(split.points = q[best], objective.value = splits[best], ice.curves = ice))
+  return(list(split.points = q[best], objective.value = splits[best]#, ice.curves = ice
+              ))
 }
+
+
+
+# Optimization with MA-LS Chains: finds best split points and returns value of objective function
+find_best_multiway_split2 = function(feat, x, xval, y, n.splits = 1, min.node.size = 1, 
+                                     objective, control = NULL, ...) {
+  unique.x = length(unique(xval))
+  # max. number of splits to be performed must be unique.x-1
+  if (n.splits >= unique.x)
+    n.splits = unique.x - 1
+  # if only one split is needed, we use exhaustive search
+  if (n.splits == 1)
+    return(find_best_binary_split(feat, x, xval, y, n.splits = n.splits,
+                                  min.node.size = min.node.size, objective = objective))
+  
+  # generate initial population
+  xval.candidates = generate_split_candidates(xval, use.quantiles = FALSE)
+  pop = replicate(n.splits, sample(xval.candidates, size = min(n.splits*10, unique.x)))
+  pop = unique(pop)
+  
+  # replace maximum number of evaluations depending of number of unique x values
+  xval.ncomb = prod(rep(unique.x, n.splits))
+  if (is.null(control))
+    control = Rmalschains::malschains.control(istep = 100, ls = "sw")
+  control$istep = min(control$istep, xval.ncomb)
+  
+  # possible lower and upper values
+  lower = rep(min(xval.candidates), n.splits)
+  upper = rep(max(xval.candidates), n.splits)
+  
+  # optimization function
+  .perform_split = function(par)
+    perform_split(split.points = par, feat = feat, x = x, xval = xval, y = y, min.node.size = min.node.size,
+                  objective = objective)[[1]]
+  best = Rmalschains::malschains(.perform_split, lower = lower, upper = upper,
+                                 initialpop = pop, verbosity = 0, control = control, ...) #   control = malschains.control(istep = 300, ls = "sw"),
+  
+  return(list(split.points = sort(best$sol), objective.value = best$fitness))
+}
+
+
+
+split_parent_node = function(Y, X, feat, n.splits = 1, min.node.size = 1, optimizer, 
+                             objective, ...) {
+  assert_data_frame(X)
+  #assert_choice(target.col, choices = colnames(data))
+  assert_integerish(n.splits)
+  assert_integerish(min.node.size)
+  assert_function(objective, args = c("y", "x", "requires.x"))
+  assert_function(optimizer, args = c("xval", "y"))
+  
+  # find best split points per feature - TODO: adjusted that not splitted after ICE variable - option to choose?
+  opt.feature = lapply(X[,-which(colnames(X)==feat)], function(xval) {
+    optimizer(feat = feat, x = X, xval = xval, y = Y, n.splits = n.splits, min.node.size = min.node.size, 
+              objective = objective, ...)
+  })
+  
+  result = rbindlist(lapply(opt.feature, as.data.frame), idcol = "feature")
+  result = result[, .(split.points = list(split.points)), by = c("feature", "objective.value"), with = TRUE]
+  result$best.split = result$objective.value == min(result$objective.value)
+  #result = result[, best.split := objective.value == min(objective.value)]
+  return(result)
+}
+
 
 
 #------------------------------------------------------------------------------------------------------------
@@ -141,6 +206,10 @@ effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "z
 # Get ICE values and arrange them in a horizontal matrix
 Y = spread(effect$results$z, .borders, .value)
 Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+# centered ICE curves
+for(i in 1:nrow(Y)){
+  Y[i,] = as.numeric(unname(Y[i,])) - mean(as.numeric(unname(Y[i,])))
+}
 
 
 # Plot ICE curves
@@ -152,7 +221,26 @@ ggplot(effect$results$z, aes(x = .borders, y = .value)) +
 # Results with adjusted optimization function of binary splits:
 
 # get results of best binary splits and ice curves of best split point
-res = find_best_binary_split(feat = "z", x = X, xval = X[,"d"], y = Y, objective = SS_fre)
+res = find_best_binary_split(feat = "x2", x = X, xval = X[,"x1"], y = Y, objective = SS_fre)
+res2 = split_parent_node(Y = Y, X = X, feat = "x2", optimizer = find_best_multiway_split, objective = SS_fre)
+res = list()
+sp = function(){
+  for(i in 1:4) {
+    res[[i]] = split_parent_node(Y = Y, X = X, feat = "x2", n.splits = i, min.node.size = 10, 
+                     optimizer = find_best_multiway_split2, objective = SS_fre)
+    if(i > 1){
+      obj1 = res[[i-1]][which(res[[i-1]]$best.split==TRUE), "objective.value"]
+      obj2 = res[[i]][which(res[[i-1]]$best.split==TRUE), "objective.value"]
+      improve = (obj1-obj2)/obj1
+      if(improve < 0.1) return(res[(i-1)])
+    }
+  }
+  return(res[[i]])
+}
+
+
+
+
 plot.data.new = res$ice.curves
 
 # prepare data for plotting
@@ -172,3 +260,13 @@ data.new = rbindlist(data.new)
 # Plot splitted ICE curves
 ggplot(data.new, aes(x = .borders, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
+
+
+
+
+opt.feature = lapply(X[,-which(colnames(X)==feat)], function(xval) {
+  optimizer(feat = feat, x = X, xval = xval, y = Y, n.splits = n.splits, min.node.size = min.node.size, 
+            objective = objective)
+})
+
+
