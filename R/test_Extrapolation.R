@@ -30,7 +30,7 @@ generate_split_candidates = function(xval, use.quantiles = TRUE) {
 
 
 # Frechet distance measure (sum of squares)
-SS_fre = function(y, x, requires.x = FALSE) { # slow
+SS_fre = function(y, x, requires.x = TRUE) { # slow
   # using only y-axis of curves is enough as x-axis is always the same for all curves
   require(kmlShape)
   center = colMeans(y)
@@ -45,9 +45,27 @@ SS_fre = function(y, x, requires.x = FALSE) { # slow
 # Filter function to use only ice curves within grid points to find best split point
 filter = function(feat, X, Y, sub_number){
   values = unique(X[sub_number,feat])
-  dt <- data.table(value = values)
-  dt[, Range := cut(values, breaks = c(min(X[,feat])-0.0001,as.numeric(names(Y)), max(X[,feat])+0.0001), labels = c(names(Y), names(Y)[length(names(Y))]))]
-  return(which(names(Y) %in% unique(dt$Range)))
+  if(length(unique(X[,feat])) > 2){
+    dt <- data.table(value = values)
+    dt[, Range := cut(values, breaks = c(min(X[,feat])-0.0001,as.numeric(names(Y)), max(X[,feat])+0.0001), labels = c(names(Y), names(Y)[length(names(Y))]))]
+    return(which(names(Y) %in% unique(dt$Range)))
+    }
+  else if(length(unique(X[,feat])) == length(values)){
+    #dt = data.table(value = as.numeric(names(Y)))
+    return(c(1:length(names(Y))))
+  }
+  else if(length(values) == 1 & length(unique(X[,feat]))==2){
+    if(values < mean(unique(X[,feat]))){
+      #dt = data.table(value = as.numeric(names(Y))[1:round(ncol(Y)/2,0)])
+      return(c(1:round(ncol(Y)/2,0)))
+    }
+    else if(values > mean(unique(X[,feat]))){
+      #dt = data.table(value = as.numeric(names(Y))[round(ncol(Y)/2,0):ncol(Y)])
+      return(c(round(ncol(Y)/2,0):ncol(Y)))
+    }
+  }
+  
+  
 }
 
 
@@ -76,7 +94,7 @@ perform_split = function(split.points, feat, x, xval, y, min.node.size, objectiv
   y.list.filtered = lapply(seq_along(unique(node.number)), FUN = function(i) {
     sub_number = which(node.number==i)
     ind = filter(feat, x, y, sub_number)
-    y.list[[i]][,ind]
+    y.list[[i]][,ind, drop = FALSE]
   })
   # x.list only needed if this is used in the objective
   requires.x = formals(objective)[["requires.x"]]
@@ -201,8 +219,8 @@ X = dat[, setdiff(colnames(dat), "y")]
 # Fit model and compute ICE for z
 mod = ranger(y ~ ., data = dat, num.trees = 500)
 pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
-model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "z")
+model = Predictor$new(mod, data = X, y = y, predict.function = pred)
+effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x5")
 # Get ICE values and arrange them in a horizontal matrix
 Y = spread(effect$results$z, .borders, .value)
 Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
@@ -222,23 +240,80 @@ ggplot(effect$results$z, aes(x = .borders, y = .value)) +
 
 # get results of best binary splits and ice curves of best split point
 res = find_best_binary_split(feat = "x2", x = X, xval = X[,"x1"], y = Y, objective = SS_fre)
-res2 = split_parent_node(Y = Y, X = X, feat = "x2", optimizer = find_best_multiway_split, objective = SS_fre)
-res = list()
-sp = function(){
-  for(i in 1:4) {
-    res[[i]] = split_parent_node(Y = Y, X = X, feat = "x2", n.splits = i, min.node.size = 10, 
-                     optimizer = find_best_multiway_split2, objective = SS_fre)
+res2 = split_parent_node(Y = Y, X = X, feat = "x3", optimizer = find_best_multiway_split2, n.splits = 1, objective = SS_fre, min.node.size = 10)
+sp(X, Y, "x4", 3, 10, SS_fre, 0.1, 0.1)
+
+sp = function(x, y, feat, n.splits, min.node.size, objective, improve.first.split, improve.n.splits){
+  res = list()
+  for(i in 1:n.splits) {
+    res[[i]] = split_parent_node(Y = y, X = x, feat = feat, n.splits = i, min.node.size = min.node.size, 
+                     optimizer = find_best_multiway_split2, objective = objective)
+    if(i == 1){
+      SS_total = objective(y = y, x = x)
+      improve = (SS_total-res[[i]][which(res[[i]]$best.split==TRUE), "objective.value"])/SS_total
+      if(improve < improve.first.split) return(NULL)
+    }
     if(i > 1){
       obj1 = res[[i-1]][which(res[[i-1]]$best.split==TRUE), "objective.value"]
       obj2 = res[[i]][which(res[[i-1]]$best.split==TRUE), "objective.value"]
       improve = (obj1-obj2)/obj1
-      if(improve < 0.1) return(res[(i-1)])
+      if(improve < improve.n.splits) return(list(res[(i-1)], SS_total))
     }
   }
-  return(res[[i]])
+  return(list(res[[i]], SS_total))
+}
+
+library(dplyr)
+find_potential_interactions <- function(x, model,  objective, n.splits = 3, min.node.size = 1, improve.first.split = 0.1, improve.n.splits = 0.1){
+  p = ncol(x)
+  for(i in 1:p){
+    effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = colnames(x)[i])
+    # Get ICE values and arrange them in a horizontal matrix
+    Y = spread(effect$results[[colnames(x)[i]]], .borders, .value)
+    Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+    for(j in 1:nrow(Y)){
+      Y[j,] = as.numeric(unname(Y[j,])) - mean(as.numeric(unname(Y[j,])))
+    }
+    result.splits = sp(x = x, y = Y, feat = colnames(x)[i], n.splits = n.splits, min.node.size = min.node.size,
+                       objective =objective, improve.first.split = improve.first.split, improve.n.splits = improve.n.splits)
+    print(result.splits)
+    
+    if(!is.null(result.splits)){
+      result.sub = data.frame(result.splits[[1]])
+      result.sub$improvement = (result.splits[[2]] - result.sub$objective.value)/result.splits[[2]]
+      result.sub$ICEfeature = colnames(x)[i]
+      if(i ==1) result = result.sub
+      else result = bind_rows(result, result.sub)
+    }
+    
+  }
+  return(result)
 }
 
 
+
+potential.interactions = find_potential_interactions(X, model, SS_fre, 3, min.node.size= 10, improve.first.split = 0.1, improve.n.splits = 0.1)
+interactions = find_true_interactions(X, model)
+
+find_true_interactions <- function(x, model, objective = SS_fre, n.splits = 3, min.node.size = 10, improve.first.split = 0.1, improve.n.splits = 0.1, interaction.factor = 0.05){
+  potential.interactions = find_potential_interactions(x = x, model = model, objective = objective, n.splits = n.splits, min.node.size= min.node.size)
+  
+  
+  true.interactions = potential.interactions[which(potential.interactions$improvement > interaction.factor),]
+  
+  ind = c()
+  for(i in 1:nrow(true.interactions)){
+    
+    n.row = nrow(true.interactions[which(true.interactions$feature %in% true.interactions$ICEfeature[i]) %in% which(true.interactions$ICEfeature %in% true.interactions$feature[i]),])
+    if(n.row == 0){
+      ind = c(ind, i)
+    }
+  }
+  true.interactions.all = true.interactions[-ind,]
+  return(true.interactions.all[order(true.interactions.all$improvement, decreasing = TRUE),])
+   
+  
+}
 
 
 plot.data.new = res$ice.curves
