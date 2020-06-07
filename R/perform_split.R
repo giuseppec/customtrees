@@ -10,12 +10,9 @@
 #' @param y target
 #' @return value of the objective
 #' @export
+#' @example inst/examples/perform_split.R
 #'
 perform_split = function(split.points, xval, y, min.node.size, objective) {
-  UseMethod("perform_split")
-}
-
-perform_split.numeric = function(split.points, xval, y, min.node.size, objective) {
   # args = formalArgs(objective)
   # deparse(body(objective))
   # always increasing split points
@@ -26,6 +23,7 @@ perform_split.numeric = function(split.points, xval, y, min.node.size, objective
   # compute size of each childnode
   node.size = tabulate(node.number)
   # if minimum node size is violated, return Inf
+  # TODO: instead of returning Inf try to avoid that this happens by fixing split points
   if (min(node.size) < min.node.size)
     return(Inf)
   # compute objective in each interval and sum it up
@@ -47,7 +45,7 @@ perform_split.factor = function(split.points, xval, y, min.node.size, objective)
   lev = levels(xval)
   xval = as.numeric(xval)
   split.points = which(lev %in% split.points)
-  perform_split.numeric(xval = xval, split.points = split.points, y = y, min.node.size = min.node.size, objective = objective)
+  perform_split(xval = xval, split.points = split.points, y = y, min.node.size = min.node.size, objective = objective)
 }
 
 # perform_split2 = function(split.points, x, y, min.node.size = 10, objective) {

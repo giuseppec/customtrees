@@ -4,7 +4,10 @@ output: github_document
 
 ```{r global_options, include=FALSE}
 library(knitr)
+library(checkmate)
+library(data.table)
 opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+options(width = 120)
 set.seed(123)
 ```
 
@@ -38,6 +41,7 @@ Install the development version from GitHub:
 ```{r}
 library(tidyverse)
 library(Rmalschains)
+library(dfoptim)
 library(iml)
 library(ranger)
 library(kmlShape)
@@ -110,19 +114,18 @@ y = ifelse(x < pi/2, rnorm(nsim, mean = 0),
   ifelse(x < pi, rnorm(nsim, mean = 10, sd = 2), 
     rnorm(nsim, mean = -10, sd = 5)))
 
-# Simulated annealing from find_best_multiway_split
-split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split, 
-  n.splits = 2, control = list(maxit = 1000))
-
-# MA-LS Chains optimization from find_best_multiway_split2 (claimed to be faster and better)
-split2 = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split2, 
+# MA-LS Chains
+split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split_mals, 
+  n.splits = 2)
+# Hooke-Jeeves derivative-free
+split2 = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split_gensa, 
   n.splits = 2)
 
 split
 split2
 
 plot(x, y)
-abline(v = unlist(split$split.points))
+abline(v = unlist(split2$split.points))
 ```
 
 # MOB with binary splits (linear model in node)
@@ -142,8 +145,15 @@ abline(v = unlist(split$split.points))
 ```{r}
 y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 
-split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split2, n.splits = 3)
+# MA-LS Chains
+split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split_mals, 
+  n.splits = 3)
+# Hooke-Jeeves derivative-free
+split2 = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split_gensa, 
+  n.splits = 3)
+
 split
+split2
 
 plot(x, y)
 abline(v = unlist(split$split.points))
@@ -156,8 +166,8 @@ We first generate some functional data:
 ```{r}
 # Simulate Data
 n = 500
-x1 = runif(n, -1, 1)
-x2 = runif(n, -1, 1)
+x1 = round(runif(n, -1, 1), 1)
+x2 = round(runif(n, -1, 1), 3)
 x3 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
 x4 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.7, 0.3))
 eps = rnorm(n, 0, 1)
@@ -166,10 +176,10 @@ eps = rnorm(n, 0, 1)
 x5 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
 x6 = rnorm(n, mean = 1, sd = 5)
 
-# y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
+y = 0.2*x1 - 8*x2 + ifelse(x3 == 0, I(16*x2),0) + ifelse(x1 > mean(x1), I(8*x2),0) + eps
 # We also get interesting results using a 2-way interaction of numeric features
 #y = 0.2*x1 - 8*x2 + 8*x6*x2 + eps
-y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
+#y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
 
 dat = data.frame(x1, x2, x3, x4, x5, x6, y)
 X = dat[, setdiff(colnames(dat), "y")]
@@ -246,7 +256,7 @@ This is because the curve structure along the x-axis is not considered in the di
 
 ```{r}
 sp_multiway = split_parent_node(Y = Y, X = X, objective = SS_mah2, 
-  n.splits = 5, optimizer = find_best_multiway_split2)
+  n.splits = 5, optimizer = find_best_multiway_split)
 sp_multiway
 node_index_multiway = generate_node_index(Y, X, result = sp_multiway)
 str(node_index_multiway)
@@ -261,8 +271,13 @@ Instead, using a distance measure that is suited for curves (e.g., frechet dista
 
 ```{r}
 sp_multiway_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = 5, optimizer = find_best_multiway_split2)
+  n.splits = 5, optimizer = find_best_multiway_split_mals)
 sp_multiway_frechet
+
+sp_multiway_frechet2 = split_parent_node(Y = Y, X = X, objective = SS_fre, 
+  n.splits = 5, optimizer = find_best_multiway_split_gensa)
+sp_multiway_frechet2
+
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multiway_frechet)
 str(node_index_multiway_frechet)
 
@@ -276,9 +291,8 @@ ggplot(plot.data, aes(x = .borders, y = .value)) +
 
 Now, we try a non-linear effect with a continous interaction effect.
 
-```{r, eval = FALSE}
-y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + ifelse(x3 == 0, I(8*x2),0) + eps
-
+```{r, eval = TRUE}
+y = 0.2*x1 - 8*x2^2 + 5*cos(x2*5)*x6 + eps
 dat = data.frame(x1, x2, x3, x4, x5, x6, y)
 X = dat[, setdiff(colnames(dat), "y")]
 
@@ -288,20 +302,34 @@ pred = predict.function = function(model, newdata) predict(model, newdata)$predi
 model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
 effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
 
+Y = spread(effect$results$x2, .borders, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+# Center ICE curves
+Y = as.data.frame(t(apply(Y, MARGIN = 1, function(x) x - mean(x))))
+
 # Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
 ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
   geom_line(aes(group = .id))
 
 sp_multi = lapply(1:5, function(i) {
   split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = i, optimizer = find_best_multiway_split2, min.node.size = 10)
+  n.splits = i, optimizer = find_best_multiway_split_mals, min.node.size = 10)
 })
+results = rbindlist(sp_multi, idcol = "n.splits")
+results[results$best.split, ]
 
-rbindlist(sp_multi, idcol = "n.splits")
+sp_multi2 = lapply(1:5, function(i) {
+  split_parent_node(Y = Y, X = X, objective = SS_fre, 
+  n.splits = i, optimizer = find_best_multiway_split_gensa, min.node.size = 10)
+})
+results2 = rbindlist(sp_multi2, idcol = "n.splits")
+results2[results2$best.split, ]
+
 
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multi[[5]])
 str(node_index_multiway_frechet)
 
+plot.data = effect$results$x2
 plot.data$.split = node_index_multiway_frechet$class[plot.data$.id]
 
 ggplot(plot.data, aes(x = .borders, y = .value)) + 

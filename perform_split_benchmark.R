@@ -69,7 +69,7 @@ find_best_binary_split2 = function(xval, y, n.splits = 1, min.node.size = 1,
   assert_choice(n.splits, choices = 1)
 
   # use different split candidates to perform split
-  q = generate_split_candidates(xval, use.quantiles = TRUE)
+  q = generate_split_candidates(xval, n.quantiles = 100, min.node.size = min.node.size)
   splits = BBmisc::vnapply(q, function(i) {
     perform_split3(i, xval = xval, y = y, min.node.size = min.node.size,
       objective = objective)
