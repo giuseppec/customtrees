@@ -29,7 +29,7 @@ generate_split_candidates = function(xval, use.quantiles = TRUE) {
 }
 
 # Frechet distance measure (sum of squares)
-SS_fre = function(y, x, requires.x = FALSE) { # slow
+SS_fre = function(y, x, X, sub_number, feat, requires.x = FALSE) { # slow
   # using only y-axis of curves is enough as x-axis is always the same for all curves
   require(kmlShape)
   center = colMeans(y)
@@ -327,9 +327,9 @@ find_true_interactions <- function(x, model, objective.split = SS_fre_filtered, 
       ind = c(ind, i)
     }
   }
-  true.interactions.all = true.interactions[-ind,]
+  if(length(ind) != 0) true.interactions = true.interactions[-ind,]
   
-  return(true.interactions.all[order(true.interactions.all$improvement, decreasing = TRUE),])
+  return(true.interactions[order(true.interactions$improvement, decreasing = TRUE),])
 }
 
 
@@ -407,6 +407,67 @@ ia = Interaction$new(model, grid.size = 20)
 
 
 
+#-------------------------------------------------------------------------------------------------------------
+# simulation studies with correlated features
+
+source("R/helper_functions_sim.r")
+
+# generate data
+p = 10
+n = 500
+
+set.seed(1234)
+Xsim = sim_data(N=n, n_groups= 1, y = 1, size_groups = 10, prop = c(0.4))
+epsilon = rnorm(n)
+
+Xsim = as.data.frame(Xsim)
+colnames(Xsim) = paste0("V",1:p)
+
+y = Xsim[,2] + 5*cos(Xsim[,3]*5)*Xsim[,6] + ifelse(Xsim[,10] <= mean(Xsim[,10]), I(8*Xsim[,3]),0) + epsilon
+
+
+dat = data.frame(Xsim,y)
+X = dat[, setdiff(colnames(dat), "y")]
 
 
 
+# Fit model and compute ICE for z
+mod = ranger(y ~ ., data = dat, num.trees = 500)
+pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+model = Predictor$new(mod, data = X, y = y, predict.function = pred)
+
+# interactions # todo: Fehler bei "ind" nochmal testen
+potential.interactions = find_potential_interactions(X, model, SS_fre_filtered, SS_fre, 3, min.node.size= 20, improve.first.split = 0.1, improve.n.splits = 0.1)
+interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
+#saveRDS(interactions, "interactions.rds")
+# zu hohe improvements durchweg - gefilterte objective funktioniert hier nicht - kann ungefilterte einfach 
+# verwendet werden? nochmals durchdenken
+# Interaktion zwischen x3 und x10 wird eindeutig gefunden. Nicht eindeutig für x3 und x6 (auch nicht bei HStatistik)
+# Evtl. mit angepasster objective
+
+# compare with hstatistics
+ia = Interaction$new(model, feature = colnames(X)[i], grid.size = 20)
+
+
+
+
+effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "V6")
+# Get ICE values and arrange them in a horizontal matrix
+Y = spread(effect$results$V6, .borders, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+# centered ICE curves
+for(i in 1:nrow(Y)){
+  Y[i,] = as.numeric(unname(Y[i,])) - mean(as.numeric(unname(Y[i,])))
+}
+
+
+res = split_parent_node(Y, X, feat = "V6", n.splits = 1, min.node.size = 30, optimizer = find_best_multiway_split2, extrapol = TRUE, objective = SS_fre_filtered)
+
+ice = get_ice_curves(X = X, Y = Y, result = res)
+
+
+plot.data = plot.prep.full(ice)
+
+# Plot splitted ICE curves
+ggplot(plot.data, aes(x = .borders, y = .value)) + 
+  geom_line(aes(group = .id)) + facet_grid(~ .split)
