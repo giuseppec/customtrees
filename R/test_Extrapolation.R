@@ -49,7 +49,7 @@ SS_fre_filtered = function(y, x, X, sub_number, requires.x = FALSE, feat) {
   grid.x = as.numeric(names(center))
   pdp.y = unname(center)
   dist = apply(y.filtered, 1, function(ice) distFrechet(grid.x, pdp.y, grid.x, ice, FrechetSumOrMax = "sum"))
-  sum(dist)
+  sum(dist)*20/length(indices)
 }
 
 
@@ -202,7 +202,7 @@ split_parent_node = function(Y, X, feat, n.splits = 1, min.node.size = 1, optimi
   # find best split points per feature - TODO: adjusted that not splitted after ICE variable - option to choose?
   opt.feature = lapply(X[,-which(colnames(X)==feat)], function(xval) {
     optimizer(feat = feat, x = X, xval = xval, y = Y, n.splits = n.splits, min.node.size = min.node.size, 
-              extrapol = TRUE, objective = objective, ...) 
+              extrapol = extrapol, objective = objective, ...) 
   })
   
   result = rbindlist(lapply(opt.feature, as.data.frame), idcol = "feature")
@@ -413,17 +413,17 @@ ia = Interaction$new(model, grid.size = 20)
 source("R/helper_functions_sim.r")
 
 # generate data
-p = 10
+p = 6
 n = 500
 
 set.seed(1234)
-Xsim = sim_data(N=n, n_groups= 1, y = 1, size_groups = 10, prop = c(0.4))
+Xsim = sim_data(N=n, n_groups= 1, y = 1, size_groups = 6, prop = c(1))
 epsilon = rnorm(n)
 
 Xsim = as.data.frame(Xsim)
 colnames(Xsim) = paste0("V",1:p)
 
-y = Xsim[,2] + 5*cos(Xsim[,3]*5)*Xsim[,6] + ifelse(Xsim[,10] <= mean(Xsim[,10]), I(8*Xsim[,3]),0) + epsilon
+y = Xsim[,2] + 5*cos(Xsim[,3]*5)*Xsim[,4] + ifelse(Xsim[,6] <= mean(Xsim[,6]), I(8*Xsim[,3]),0) + epsilon
 
 
 dat = data.frame(Xsim,y)
@@ -432,12 +432,14 @@ X = dat[, setdiff(colnames(dat), "y")]
 
 
 # Fit model and compute ICE for z
-mod = ranger(y ~ ., data = dat, num.trees = 500)
+# task = makeRegrTask(data = dat, target = "y")
+# res = resample("regr.ranger", task, cv5)
+mod = ranger(y ~ ., data = dat, num.trees = 1000)
 pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
 model = Predictor$new(mod, data = X, y = y, predict.function = pred)
 
 # interactions # todo: Fehler bei "ind" nochmal testen
-potential.interactions = find_potential_interactions(X, model, SS_fre_filtered, SS_fre, 3, min.node.size= 20, improve.first.split = 0.1, improve.n.splits = 0.1)
+potential.interactions = find_potential_interactions(X, model, SS_fre_filtered, SS_fre, 3, min.node.size= 30, improve.first.split = 0.1, improve.n.splits = 0.1)
 interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
 #saveRDS(interactions, "interactions.rds")
 # zu hohe improvements durchweg - gefilterte objective funktioniert hier nicht - kann ungefilterte einfach 
@@ -446,14 +448,14 @@ interactions = potential.interactions[order(potential.interactions$improvement, 
 # Evtl. mit angepasster objective
 
 # compare with hstatistics
-ia = Interaction$new(model, feature = colnames(X)[i], grid.size = 20)
+ia = Interaction$new(model, feature = colnames(X)[2], grid.size = 20)
 
 
 
 
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "V6")
+effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "V3")
 # Get ICE values and arrange them in a horizontal matrix
-Y = spread(effect$results$V6, .borders, .value)
+Y = spread(effect$results$V3, .borders, .value)
 Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
 # centered ICE curves
 for(i in 1:nrow(Y)){
@@ -461,7 +463,7 @@ for(i in 1:nrow(Y)){
 }
 
 
-res = split_parent_node(Y, X, feat = "V6", n.splits = 1, min.node.size = 30, optimizer = find_best_multiway_split2, extrapol = TRUE, objective = SS_fre_filtered)
+res = split_parent_node(Y, X, feat = "V3", n.splits = 1, min.node.size = 30, optimizer = find_best_multiway_split2, extrapol = TRUE, objective = SS_fre_filtered)
 
 ice = get_ice_curves(X = X, Y = Y, result = res)
 
