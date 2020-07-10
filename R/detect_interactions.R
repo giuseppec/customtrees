@@ -4,16 +4,16 @@ interactions_per_feature = function(x, y, feat, n.splits, min.node.size, optimiz
   for (i in 1:n.splits) {
     res[[i]] = split_parent_node(Y = y, X = x, feat = feat, n.splits = i, min.node.size = min.node.size, 
                                  optimizer = optimizer, objective = objective.split)
-    if (i == 1) {
+    if (i == 1) {#is.na(unlist(improve)) in case improve gets NaN (0/0)
       obj.total = objective.total(y = y, xval = x)
       improve = (obj.total - res[[i]][which(res[[i]]$best.split == TRUE), "objective.value"])/obj.total
-      if (improve < improve.first.split) return(NULL)
+      if (improve < improve.first.split | is.nan(unlist(improve))) return(NULL)
     }
     if (i > 1) {
       obj.sub1 = res[[i - 1]][which(res[[i - 1]]$best.split == TRUE), "objective.value"]
       obj.sub2 = res[[i]][which(res[[i - 1]]$best.split == TRUE), "objective.value"]
-      improve = (obj.sub1 - obj.sub2)/obj.sub1
-      if (improve < improve.n.splits) return(list(res[(i - 1)], obj.total))
+      improve = (obj.sub1 - obj.sub2)/(obj.sub1)
+      if (improve < improve.n.splits | is.nan(unlist(improve))) return(list(res[(i - 1)], obj.total))
     }
   }
   return(list(res[[i]], obj.total))
@@ -35,15 +35,16 @@ find_potential_interactions <- function(x, model,  optimizer, objective.split, o
                                              optimizer = optimizer, objective.split = objective.split, objective.total = objective.total, 
                                              improve.first.split = improve.first.split, improve.n.splits = improve.n.splits)
     
+    #if(i == 1 & is.null(result.splits)) next
     if (!is.null(result.splits)) {
       result.sub = data.frame(result.splits[[1]])
       result.sub$improvement = (result.splits[[2]] - result.sub$objective.value)/result.splits[[2]]
       result.sub$ICEfeature = colnames(x)[i]
-      if (i == 1) result = result.sub
-      else result = bind_rows(result, result.sub)
+      if (exists("res") == FALSE) res = result.sub
+      else res = bind_rows(res, result.sub)
     }
   }
-  return(result)
+  return(res)
 }
 
 
@@ -57,7 +58,7 @@ find_true_interactions <- function(x, model, optimizer, objective.split = SS_fre
   
   ind = integer(length = 0)
   for (i in 1:nrow(true.interactions)) {
-    n.row = nrow(true.interactions[which(true.interactions$feature %in% true.interactions$ICEfeature[i]) %in% which(true.interactions$ICEfeature %in% true.interactions$feature[i]),])
+    n.row = nrow(true.interactions[which(which(true.interactions$feature %in% true.interactions$ICEfeature[i]) %in% which(true.interactions$ICEfeature %in% true.interactions$feature[i])),])
     if (n.row == 0) {
       ind = c(ind, i)
     }
