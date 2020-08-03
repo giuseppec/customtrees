@@ -6,7 +6,7 @@ output: github_document
 library(knitr)
 library(checkmate)
 library(data.table)
-opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)#, cache = TRUE)
 options(width = 120)
 set.seed(123)
 ```
@@ -70,6 +70,29 @@ SS_mah = function(y, x, requires.x = FALSE, cov = NULL) {
   sum(mahalanobis(y, center = center, cov = cov, tol = 1e-30))
 }
 
+# point-wise L1 distance (is this frechet distance if grids are the same?)
+SS_L1 = function(y, x, requires.x = FALSE) {
+  require(Rfast)
+  n = nrow(y)
+  ypred = Rfast::colMedians(as.matrix(y))
+  sum(t(abs(t(y) - ypred)))
+}
+
+# point-wise L2 distance
+SS_L2 = function(y, x, requires.x = FALSE) {
+  n = nrow(y)
+  ypred = colMeans(y)
+  sum(t((t(y) - ypred)^2))
+}
+
+# # point-wise L1 distance = frechet distance if grids are the same
+# SS_L1 = function(y, x, requires.x = FALSE) {
+#   n = nrow(y)
+#   center = colMeans(y)
+#   centermat = t(replicate(n, center))
+#   sum(abs(y - centermat))
+# }
+
 # Frechet distance FDA measure
 SS_fre = function(y, x, requires.x = FALSE) { # slow
   # using only y-axis of curves is enough as x-axis is always the same for all curves
@@ -115,17 +138,13 @@ y = ifelse(x < pi/2, rnorm(nsim, mean = 0),
     rnorm(nsim, mean = -10, sd = 5)))
 
 # MA-LS Chains
-split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split_mals, 
-  n.splits = 2)
-# Hooke-Jeeves derivative-free
-split2 = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split_gensa, 
-  n.splits = 2)
+split = split_parent_node(y, X, objective = SS, 
+  optimizer = find_best_multiway_split_mals, n.splits = 2)
 
 split
-split2
 
 plot(x, y)
-abline(v = unlist(split2$split.points))
+abline(v = unlist(split$split.points))
 ```
 
 # MOB with binary splits (linear model in node)
@@ -148,12 +167,8 @@ y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 # MA-LS Chains
 split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split_mals, 
   n.splits = 3)
-# Hooke-Jeeves derivative-free
-split2 = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split_gensa, 
-  n.splits = 3)
 
 split
-split2
 
 plot(x, y)
 abline(v = unlist(split$split.points))
@@ -186,12 +201,16 @@ X = dat[, setdiff(colnames(dat), "y")]
 
 # Fit model and compute ICE for x2
 mod = ranger(y ~ ., data = dat, num.trees = 500)
-pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+pred = function(model, newdata) predict(model, newdata)$predictions
 model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
+effect = FeatureEffect$new(model, method = "ice", grid.size = 20, feature = "x2")
+
+eff = as.data.table(effect$results)
+# Center ICE curves
+eff = as.data.frame(eff[, .value := (.value - mean(.value)), by = c(".type", ".id")])
 
 # Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
-ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
+ggplot(eff, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id))
 ```
 
@@ -199,8 +218,9 @@ Formulate curves above by multivariate target and find feature that splits the c
 
 ```{r}
 # Get ICE values and arrange them in a horizontal matrix
-Y = spread(effect$results$x2, .borders, .value)
-Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+Y = spread(eff, x2, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id"))]
+
 str(X) # contains our feature values
 str(Y) # contains ICE values for each grid point
 
@@ -214,7 +234,6 @@ sp
 node_index = generate_node_index(Y, X, result = sp)
 str(node_index)
 
-Y = as.data.table(Y)
 # frechet distance yields same splits but is a bit slower
 sp_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre,
   n.splits = 1, optimizer = find_best_binary_split)
@@ -242,10 +261,10 @@ str(sp2)
 Visualize the results:
 
 ```{r}
-plot.data = effect$results$x2
-plot.data$.split = node_index$class[plot.data$.id]
+plot.data = effect$results
+plot.data$.split = node_index_frechet$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
@@ -263,27 +282,23 @@ str(node_index_multiway)
 
 plot.data$.split = node_index_multiway$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
 Instead, using a distance measure that is suited for curves (e.g., frechet distance) works:
 
 ```{r}
-sp_multiway_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre, 
+sp_multiway_frechet = split_parent_node(Y = Y, X = X, objective = SS_L1, 
   n.splits = 5, optimizer = find_best_multiway_split_mals)
 sp_multiway_frechet
-
-sp_multiway_frechet2 = split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = 5, optimizer = find_best_multiway_split_gensa)
-sp_multiway_frechet2
 
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multiway_frechet)
 str(node_index_multiway_frechet)
 
 plot.data$.split = node_index_multiway_frechet$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
@@ -298,40 +313,41 @@ X = dat[, setdiff(colnames(dat), "y")]
 
 # Fit model and compute ICE for x2
 mod = ranger(y ~ ., data = dat, num.trees = 1000)
-pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+pred = function(model, newdata) predict(model, newdata)$predictions
 model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
+effect = FeatureEffect$new(model, method = "ice", grid.size = 20, feature = "x2")
 
-Y = spread(effect$results$x2, .borders, .value)
-Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+eff = as.data.table(effect$results)
 # Center ICE curves
-Y = as.data.frame(t(apply(Y, MARGIN = 1, function(x) x - mean(x))))
+eff = as.data.frame(eff[, .value := (.value - mean(.value)), by = c(".type", ".id")])
+Y = spread(eff, x2, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id"))]
+#Y = as.data.frame(t(apply(Y, MARGIN = 1, function(x) x - mean(x))))
 
 # Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
-ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
+ggplot(eff, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id))
 
 sp_multi = lapply(1:5, function(i) {
-  split_parent_node(Y = Y, X = X, objective = SS_fre, 
+  split_parent_node(Y = Y, X = X, objective = SS_L1, 
   n.splits = i, optimizer = find_best_multiway_split_mals, min.node.size = 10)
 })
 results = rbindlist(sp_multi, idcol = "n.splits")
 results[results$best.split, ]
 
-sp_multi2 = lapply(1:5, function(i) {
-  split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = i, optimizer = find_best_multiway_split_gensa, min.node.size = 10)
-})
-results2 = rbindlist(sp_multi2, idcol = "n.splits")
-results2[results2$best.split, ]
-
+# sp_multi2 = lapply(1:5, function(i) {
+#   split_parent_node(Y = Y, X = X, objective = SS_L1, 
+#   n.splits = i, optimizer = find_best_multiway_split_gensa, min.node.size = 10)
+# })
+# results2 = rbindlist(sp_multi2, idcol = "n.splits")
+# results2[results2$best.split, ]
 
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multi[[5]])
 str(node_index_multiway_frechet)
 
-plot.data = effect$results$x2
+plot.data = effect$results
 plot.data$.split = node_index_multiway_frechet$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```

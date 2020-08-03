@@ -35,7 +35,7 @@ find_best_multiway_split_mals = function(xval, y, n.splits = 1, min.node.size = 
   xval.candidates = generate_split_candidates(xval, n.quantiles = NULL, min.node.size = min.node.size)
   # pop = replicate(n.splits, sample(xval.candidates, size = min(n.splits*10, length(xval.candidates))))
   pop.size = max(min(50, floor(length(xval.candidates)/n.splits)), 1)
-  pop = t(replicate(pop.size, sort(sample(xval.candidates, size = n.splits))))
+  pop = t(replicate(pop.size, sort.int(sample(xval.candidates, size = n.splits))))
   pop = unique(pop)
 
   if (is.null(control))
@@ -57,7 +57,7 @@ find_best_multiway_split_mals = function(xval, y, n.splits = 1, min.node.size = 
     initialpop = pop, verbosity = 0, control = control, maxEvals = maxEvals,
     ...) #   control = malschains.control(istep = 300, ls = "sw"),
 
-  return(list(split.points = sort(best$sol), objective.value = best$fitness))
+  return(list(split.points = sort.int(best$sol), objective.value = best$fitness))
 }
 
 # Optimization with Hooke-Jeeves and restarts
@@ -81,8 +81,8 @@ find_best_multiway_split_hjn = function(xval, y, n.splits = 1, min.node.size = 1
   #init = lhs::randomLHS(control$maxrestarts, n.splits)
   #init = apply(init, 2, sort)
   #init = apply(init, 1, function(x) lower[1] + (upper[1] - lower[1])*x)
-  init = replicate(control$maxrestarts, sort(sample(candidate, size = n.splits)))
-  #init = sort(sample(candidate, size = n.splits))
+  init = replicate(control$maxrestarts, sort.int(sample(candidate, size = n.splits)))
+  #init = sort.int(sample(candidate, size = n.splits))
 
   best = vector("list", length = control$maxrestarts)
   i = 1
@@ -95,7 +95,7 @@ find_best_multiway_split_hjn = function(xval, y, n.splits = 1, min.node.size = 1
   }
   best = best[[which.min(unlist(lapply(best, function(x) x$value)))]]
 
-  return(list(split.points = sort(best$par), objective.value = best$value))
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
 }
 
 # Optimization with Hooke-Jeeves derivative-free (fast, for low dimensions gets stuck in local minima -> restarts?)
@@ -113,8 +113,8 @@ find_best_multiway_split_hjkb = function(xval, y, n.splits = 1, min.node.size = 
   # find optimal split points constrained optimization
   n.quantiles = NULL #min(4*n.splits, 40)
   candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
-  init = sort(sample(candidate, size = n.splits))
-  # init = lapply(1:10, function(i) sort(sample(candidate, size = n.splits))) #candidate[1:n.splits]
+  init = sort.int(sample(candidate, size = n.splits))
+  # init = lapply(1:10, function(i) sort.int(sample(candidate, size = n.splits))) #candidate[1:n.splits]
   # init.eval = vapply(init, perform_split,
   #   xval = xval, y = y, min.node.size = min.node.size, objective = objective,
   #   FUN.VALUE = NA_real_, USE.NAMES = FALSE)
@@ -125,10 +125,10 @@ find_best_multiway_split_hjkb = function(xval, y, n.splits = 1, min.node.size = 
   best = dfoptim::hjkb(par = init, fn = perform_split, lower = lower, upper = upper, control = control,
     xval = xval, y = y, min.node.size = min.node.size, objective = objective)
 
-  # best = dfoptim::hjkb(par = sort(best$par), fn = perform_split, lower = lower, upper = upper, control = control,
+  # best = dfoptim::hjkb(par = sort.int(best$par), fn = perform_split, lower = lower, upper = upper, control = control,
   #   xval = xval, y = y, min.node.size = min.node.size, objective = objective)
 
-  return(list(split.points = sort(best$par), objective.value = best$value))
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
 }
 
 # Optimization with GenSA
@@ -143,10 +143,10 @@ find_best_multiway_split_gensa = function(xval, y, n.splits = 1, min.node.size =
   # generate initial population
   n.quantiles = NULL
   candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
-  init = sort(sample(candidate, size = n.splits))
+  init = sort.int(sample(candidate, size = n.splits))
 
   if (is.null(control))
-    control = list(max.call = 640, nb.stop.improvement = min(n.splits*10, 100), smooth = FALSE)
+    control = list(max.call = 640, nb.stop.improvement = min(20*n.splits, 100), smooth = FALSE)
 
   # possible lower and upper values
   lower = rep(min(xval), n.splits)
@@ -156,7 +156,7 @@ find_best_multiway_split_gensa = function(xval, y, n.splits = 1, min.node.size =
   best = GenSA::GenSA(par = init, fn = perform_split, lower = lower, upper = upper,
     control = control, xval = xval, y = y, min.node.size = min.node.size, objective = objective)
 
-  return(list(split.points = sort(best$par), objective.value = best$value))
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
 }
 
 # helper functions
@@ -168,22 +168,39 @@ adjust_nsplits = function(xval, n.splits) {
   return(n.splits)
 }
 
-get_closest_point = function(split.points, xval) {
-  # get closest value from xval
-  xval = sort(xval)
+# get_closest_point2 = function(split.points, xval, min.node.size = 10) {
+#   p = floor(length(xval)/min.node.size)
+#   ret = unique(quantile(xval, probs = (1:(p - 1))/p))
+#   vapply(ret, function(i) xval[which.min(abs(xval - i))], FUN.VALUE = NA_real_, USE.NAMES = FALSE)
+# }
+
+# replace split.points with closest value from xval taking into account min.node.size
+get_closest_point = function(split.points, xval, min.node.size = 10) {
+  xval = sort.int(xval)
+  # try to ensure min.node.size between points (is not guaranteed if many duplicated values exist)
+  chunk.ind = seq.int(min.node.size + 1, length(xval) - min.node.size, by = min.node.size)
+  xadj = unique(xval[chunk.ind]) # unique(quantile(xval, prob = chunk.ind/length(xval), type = 1))
   # xval = xval[-c(1, length(xval))]
-  ind = vapply(split.points, function(i) {
-    d = i - xval
-    which.min(abs(d))
-    #which.min(d[d >= 0])
-  }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
-  return(xval[ind])
+  split.adj = numeric(length(split.points))
+  for (i in seq_along(split.adj)) {
+    d = xadj - split.points[i]
+    ind.closest = which.min(abs(d))
+    split.adj[i] = xadj[ind.closest]
+    xadj = xadj[-ind.closest] # remove already chosen value
+  }
+  # ind = vapply(split.points, function(i) {
+  #   d = xadj - i
+  #   res = which.min(abs(d))
+  #   #which.min(d[d >= 0])
+  #   return(res)
+  # }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
+  return(sort.int(split.adj))
 }
 
 adjust_split_point = function(split.points, xval) {
   # use a value between two subsequent points
   q = split.points
-  x.unique = sort(unique(xval))
+  x.unique = sort.int(unique(xval))
   ind = which(x.unique %in% q)
   ind = ind[ind < length(x.unique)]
   if (length(ind) != length(q)) {
@@ -200,11 +217,11 @@ adjust_split_point = function(split.points, xval) {
 
 generate_split_candidates = function(xval, n.quantiles = NULL, min.node.size = 10) {
   assert_integerish(min.node.size, upper = floor((length(xval) - 1)/2))
-  xval = sort(xval)
+  xval = sort.int(xval)
   # try to ensure min.node.size between points (is not guaranteed)
   chunk.ind = seq.int(min.node.size + 1, length(xval) - min.node.size, by = min.node.size)
-  xadj = unique(quantile(xval, prob = chunk.ind/length(xval), type = 1))
-  # xadj = xval[chunk.ind]
+  #xadj = unique(quantile(xval, prob = chunk.ind/length(xval), type = 1))
+  xadj = xval[chunk.ind]
 
   if (!is.null(n.quantiles)) {
     # to speedup we use only quantile values as possible split points

@@ -1,3 +1,68 @@
+
+# cumsum representation
+find_best_multiway_split_mals = function(xval, y, n.splits = 1, min.node.size = 10,
+  objective, control = NULL, ...) {
+  n.splits = adjust_nsplits(xval, n.splits)
+  # if only one split is needed, we use exhaustive search
+  if (n.splits == 1)
+    return(find_best_binary_split(xval, y, n.splits = n.splits,
+      min.node.size = min.node.size, objective = objective))
+
+  if (is.null(control))
+    control = Rmalschains::malschains.control(istep = 100, ls = "sw", threshold = 1e-4)
+  maxEvals = 10*control$istep
+  # # replace maximum number of evaluations depending of number of unique x values
+  # xval.ncomb = prod(rep(length(xval.candidates), n.splits))
+  # control$istep = min(control$istep, xval.ncomb)
+
+  # possible lower and upper values
+  lower = c(min(xval), rep(min(diff(sort(unique(xval)))), n.splits - 1))
+  upper = c(max(xval), rep(diff(range(xval)), n.splits - 1))
+
+  # optimization function
+  .perform_split = function(par)
+    perform_split(split.points = par, xval = xval, y = y, min.node.size = min.node.size,
+      objective = objective)
+  best = Rmalschains::malschains(.perform_split, lower = lower, upper = upper,
+    verbosity = 0, control = control, maxEvals = maxEvals,
+    ...) #   control = malschains.control(istep = 300, ls = "sw"),
+
+  return(list(split.points = cumsum(best$sol), objective.value = best$fitness))
+} # cumsum representation
+perform_split = function(split.points, xval, y, min.node.size, objective) {
+  # args = formalArgs(objective)
+  # deparse(body(objective))
+  # always increasing split points
+  # split.points = xval[split.points] # integer optim
+
+  split.points = cumsum(split.points)
+  # assign intervalnr. according to split points
+
+  node.number = findInterval(x = xval, split.points, rightmost.closed = TRUE) + 1
+  # compute size of each childnode
+  node.size = tabulate(node.number)
+  # if minimum node size is violated, return Inf
+  # TODO: instead of returning Inf try to avoid that this happens by fixing split points
+  if (min(node.size) < min.node.size)
+    return(Inf)
+  # compute objective in each interval and sum it up
+  y.list = split(y, node.number)
+  # x.list only needed if this is used in the objective
+  requires.x = formals(objective)[["requires.x"]]
+  if (isTRUE(requires.x))
+    x.list = split(xval, node.number) else
+      x.list = NULL
+
+  res = vapply(seq_along(y.list), FUN = function(i) {
+    objective(y = y.list[[i]], x = x.list[[i]])
+  }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
+  sum(res)
+}
+
+
+
+
+
 SS_fre2 = function(y, x, requires.x = FALSE) { # slow
   # using only y-axis of curves is enough as x-axis is always the same for all curves
   require(kmlShape)

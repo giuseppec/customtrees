@@ -1,4 +1,43 @@
 # Optimization with
+find_best_multiway_split_mbo = function(xval, y, n.splits = 1, min.node.size = 10,
+  objective, control = NULL, ...) {
+  n.splits = adjust_nsplits(xval, n.splits)
+  # if only one split is needed, we use exhaustive search
+  if (n.splits == 1)
+    return(find_best_binary_split(xval, y, n.splits = n.splits, min.node.size = min.node.size,
+      objective = objective))
+
+  # find optimal split points constrained optimization
+  n.quantiles = NULL #min(4*n.splits, 40)
+  candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
+  init = sort.int(sample(candidate, size = n.splits))
+
+
+  obj.fun = makeSingleObjectiveFunction(
+    name = "perform_split",
+    fn = function(x) perform_split(sort.int(x), xval = xval, y = y, min.node.size = min.node.size, objective = objective),
+    par.set = makeNumericParamSet(lower = min(xval), upper = max(xval), len = n.splits),
+    global.opt.value = 0
+  )
+
+  ctrl = makeMBOControl(propose.points = 1)
+  ctrl = setMBOControlTermination(ctrl, iters = 50L)
+  ctrl = setMBOControlInfill(ctrl, crit = makeMBOInfillCritEI(),
+    opt = "focussearch", opt.focussearch.points = 100L)
+
+  lrn = makeMBOLearner(ctrl, obj.fun)
+  lrn = setHyperPars(lrn, control = list(trace = FALSE))
+
+  design = generateDesign(4*n.splits, getParamSet(obj.fun), fun = lhs::maximinLHS)
+
+  best = mbo(obj.fun, design = design, learner = lrn, control = ctrl, show.info = T)
+
+  return(list(split.points = sort.int(best$x), objective.value = best$y))
+}
+
+
+
+# Optimization with
 find_best_multiway_split_hj = function(xval, y, n.splits = 1, min.node.size = 10,
   objective, control = NULL, ...) {
   n.splits = adjust_nsplits(xval, n.splits)
@@ -10,7 +49,7 @@ find_best_multiway_split_hj = function(xval, y, n.splits = 1, min.node.size = 10
   # find optimal split points constrained optimization
   n.quantiles = NULL #min(4*n.splits, 40)
   candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
-  init = sort(sample(candidate, size = n.splits))
+  init = sort.int(sample(candidate, size = n.splits))
 
   lower = rep(min(xval), n.splits)
   upper = rep(max(xval), n.splits)
@@ -19,7 +58,7 @@ find_best_multiway_split_hj = function(xval, y, n.splits = 1, min.node.size = 10
     xval = xval, y = y, min.node.size = min.node.size, objective = objective,
     lb = lower, ub = upper, maxfeval = 640, tol = 1e-4)
 
-  return(list(split.points = sort(best$xmin), objective.value = best$fmin))
+  return(list(split.points = sort.int(best$xmin), objective.value = best$fmin))
 }
 
 # Optimization with
@@ -34,7 +73,7 @@ find_best_multiway_split_ea = function(xval, y, n.splits = 1, min.node.size = 10
   # find optimal split points constrained optimization
   n.quantiles = NULL #min(4*n.splits, 40)
   candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
-  init = sort(sample(candidate, size = n.splits))
+  init = sort.int(sample(candidate, size = n.splits))
 
   lower = rep(min(xval), n.splits)
   upper = rep(max(xval), n.splits)
@@ -46,7 +85,7 @@ find_best_multiway_split_ea = function(xval, y, n.splits = 1, min.node.size = 10
     xval = xval, y = y, min.node.size = min.node.size, objective = objective,
     lower = lower, upper = upper)
 
-  return(list(split.points = sort(best$xmin), objective.value = best$fmin))
+  return(list(split.points = sort.int(best$xmin), objective.value = best$fmin))
 }
 
 # Optimization with
@@ -64,7 +103,7 @@ find_best_multiway_split_deopt = function(xval, y, n.splits = 1, min.node.size =
   # find optimal split points constrained optimization
   n.quantiles = NULL #min(4*n.splits, 40)
   candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
-  init = sort(sample(candidate, size = n.splits))
+  init = sort.int(sample(candidate, size = n.splits))
 
   lower = rep(min(xval), n.splits)
   upper = rep(max(xval), n.splits)
@@ -79,7 +118,7 @@ find_best_multiway_split_deopt = function(xval, y, n.splits = 1, min.node.size =
     algo = list(min = lower, max = upper, repair = repair),
     xval = xval, y = y, min.node.size = min.node.size, objective = objective)
 
-  return(list(split.points = sort(best$par), objective.value = best$value))
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
 }
 
 # Optimization with constrained Nelder-Mead
@@ -95,9 +134,10 @@ find_best_multiway_split_nelder = function(xval, y, n.splits = 1, min.node.size 
     control = list(maxit = 640, reltol = 1e-4) #min((n.splits*2)*100, 1200)
 
   # find optimal split points constrained optimization
-  #init = gr(rep(0, n.splits), xval, y, objective, min.node.size)
-  n.quantiles = min(4*n.splits, 40)
-  init = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)[1:n.splits]
+  # init = gr(rep(0, n.splits), xval, y, objective, min.node.size)
+  n.quantiles = NULL #min(4*n.splits, 40)
+  candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
+  init = sort.int(sample(candidate, size = n.splits))
   ui = rbind(diag(n.splits), rep(0, n.splits)) - rbind(rep(0, n.splits), diag(n.splits))
   ci = c(min(xval), rep(0, n.splits - 1), -1*max(xval))
   best = constrOptim(theta = init, f = perform_split,
@@ -105,7 +145,7 @@ find_best_multiway_split_nelder = function(xval, y, n.splits = 1, min.node.size 
     ui = ui, ci = ci, control = control,
     xval = xval, y = y, min.node.size = min.node.size, objective = objective)
 
-  return(list(split.points = sort(best$par), objective.value = best$value))
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
 }
 
 # Optimization with constrained simulated annealing
@@ -121,7 +161,7 @@ find_best_multiway_split_sann = function(xval, y, n.splits = 1, min.node.size = 
   gr = function(i, xval, y, objective, min.node.size) {
     npar = length(i)
     q = generate_split_candidates(xval, n.quantiles = NULL, min.node.size = min.node.size)
-    sort(sample(q, size = npar))
+    sort.int(sample(q, size = npar))
   }
 
   if (is.null(control))
@@ -134,7 +174,7 @@ find_best_multiway_split_sann = function(xval, y, n.splits = 1, min.node.size = 
   n.quantiles = NULL #min(4*n.splits, 40)
   #init = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)[1:n.splits]
   candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
-  init = sort(sample(candidate, size = n.splits)) #candidate[1:n.splits]
+  init = sort.int(sample(candidate, size = n.splits)) #candidate[1:n.splits]
   ui = rbind(diag(n.splits), rep(0, n.splits)) - rbind(rep(0, n.splits), diag(n.splits))
   ci = c(min(xval), rep(0, n.splits - 1), -1*max(xval))
   best = constrOptim(theta = init, f = perform_split,
@@ -148,5 +188,5 @@ find_best_multiway_split_sann = function(xval, y, n.splits = 1, min.node.size = 
   #   objective = objective,
   #   method = "SANN", gr = gr, ...)
 
-  return(list(split.points = sort(best$par), objective.value = best$value))
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
 }

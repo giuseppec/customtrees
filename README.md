@@ -75,6 +75,29 @@ SS_mah = function(y, x, requires.x = FALSE, cov = NULL) {
   sum(mahalanobis(y, center = center, cov = cov, tol = 1e-30))
 }
 
+# point-wise L1 distance (is this frechet distance if grids are the same?)
+SS_L1 = function(y, x, requires.x = FALSE) {
+  require(Rfast)
+  n = nrow(y)
+  ypred = Rfast::colMedians(as.matrix(y))
+  sum(t(abs(t(y) - ypred)))
+}
+
+# point-wise L2 distance
+SS_L2 = function(y, x, requires.x = FALSE) {
+  n = nrow(y)
+  ypred = colMeans(y)
+  sum(t((t(y) - ypred)^2))
+}
+
+# # point-wise L1 distance = frechet distance if grids are the same
+# SS_L1 = function(y, x, requires.x = FALSE) {
+#   n = nrow(y)
+#   center = colMeans(y)
+#   centermat = t(replicate(n, center))
+#   sum(abs(y - centermat))
+# }
+
 # Frechet distance FDA measure
 SS_fre = function(y, x, requires.x = FALSE) { # slow
   # using only y-axis of curves is enough as x-axis is always the same for all curves
@@ -109,7 +132,7 @@ split
 ```
 
     ##    feature objective.value runtime split.points best.split
-    ## 1:       x        2113.473     0.2     1.605472       TRUE
+    ## 1:       x        2113.473    0.14     1.605472       TRUE
 
 ``` r
 # plot result
@@ -127,28 +150,18 @@ y = ifelse(x < pi/2, rnorm(nsim, mean = 0),
     rnorm(nsim, mean = -10, sd = 5)))
 
 # MA-LS Chains
-split = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split_mals, 
-  n.splits = 2)
-# Hooke-Jeeves derivative-free
-split2 = split_parent_node(y, X, objective = SS, optimizer = find_best_multiway_split_gensa, 
-  n.splits = 2)
+split = split_parent_node(y, X, objective = SS, 
+  optimizer = find_best_multiway_split_mals, n.splits = 2)
 
 split
 ```
 
     ##    feature objective.value runtime      split.points best.split
-    ## 1:       x        12695.16    0.88 1.572823,3.138709       TRUE
-
-``` r
-split2
-```
-
-    ##    feature objective.value runtime      split.points best.split
-    ## 1:       x        12695.16    0.86 1.570827,3.142725       TRUE
+    ## 1:       x        14884.64    0.91 1.592668,3.188205       TRUE
 
 ``` r
 plot(x, y)
-abline(v = unlist(split2$split.points))
+abline(v = unlist(split$split.points))
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
@@ -163,7 +176,7 @@ split
 ```
 
     ##    feature objective.value runtime split.points best.split
-    ## 1:       x        157.6209    0.42     3.167946       TRUE
+    ## 1:       x        157.5399    0.47     3.167946       TRUE
 
 ``` r
 plot(x, y)
@@ -180,22 +193,12 @@ y = 4 + 2 * cos(x*2) + rnorm(nsim, mean = 0, sd = abs(cos(x)) / 2)
 # MA-LS Chains
 split = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split_mals, 
   n.splits = 3)
-# Hooke-Jeeves derivative-free
-split2 = split_parent_node(y, X, objective = SS_lm, optimizer = find_best_multiway_split_gensa, 
-  n.splits = 3)
 
 split
 ```
 
     ##    feature objective.value runtime               split.points best.split
-    ## 1:       x        143.1463    6.47 1.580511,3.116469,4.713689       TRUE
-
-``` r
-split2
-```
-
-    ##    feature objective.value runtime               split.points best.split
-    ## 1:       x        143.1315    3.95 1.575756,3.101333,4.716864       TRUE
+    ## 1:       x        142.1684    4.01 1.567564,3.077776,4.699875       TRUE
 
 ``` r
 plot(x, y)
@@ -231,12 +234,16 @@ X = dat[, setdiff(colnames(dat), "y")]
 
 # Fit model and compute ICE for x2
 mod = ranger(y ~ ., data = dat, num.trees = 500)
-pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+pred = function(model, newdata) predict(model, newdata)$predictions
 model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
+effect = FeatureEffect$new(model, method = "ice", grid.size = 20, feature = "x2")
+
+eff = as.data.table(effect$results)
+# Center ICE curves
+eff = as.data.frame(eff[, .value := (.value - mean(.value)), by = c(".type", ".id")])
 
 # Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
-ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
+ggplot(eff, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id))
 ```
 
@@ -247,44 +254,45 @@ splits the curves such that they are more homogenous in the nodes:
 
 ``` r
 # Get ICE values and arrange them in a horizontal matrix
-Y = spread(effect$results$x2, .borders, .value)
-Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+Y = spread(eff, x2, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id"))]
+
 str(X) # contains our feature values
 ```
 
     ## 'data.frame':    500 obs. of  6 variables:
-    ##  $ x1: num  -0.6 -0.2 -0.7 0.2 -0.7 -0.8 -0.3 1 0.1 -0.2 ...
-    ##  $ x2: num  -0.846 0.09 0.102 0.844 0.957 0.503 -0.965 0.131 0.772 -0.688 ...
-    ##  $ x3: num  0 0 0 0 1 1 0 0 0 0 ...
-    ##  $ x4: num  0 1 1 0 1 0 0 0 0 1 ...
-    ##  $ x5: num  0 1 0 1 0 1 1 0 1 1 ...
-    ##  $ x6: num  2.838 0.656 1.965 1.386 12.49 ...
+    ##  $ x1: num  -0.8 1 -0.4 -0.6 -0.2 0.5 0.4 0.5 0.5 -0.6 ...
+    ##  $ x2: num  0.473 0.935 0.944 0.154 -0.602 -0.266 -0.912 0.958 -0.777 -0.846 ...
+    ##  $ x3: num  1 0 1 1 0 1 1 1 1 0 ...
+    ##  $ x4: num  0 0 0 0 1 1 1 0 0 0 ...
+    ##  $ x5: num  0 0 0 0 1 1 1 0 0 0 ...
+    ##  $ x6: num  -0.114 2.448 -4.638 -2.443 2.93 ...
 
 ``` r
 str(Y) # contains ICE values for each grid point
 ```
 
     ## 'data.frame':    500 obs. of  20 variables:
-    ##  $ -1                : num  -6.99 -6.67 -6.92 -8.82 1.21 ...
-    ##  $ -0.895157894736842: num  -6.33 -5.25 -6 -8.91 2.32 ...
-    ##  $ -0.790315789473684: num  -5.44 -4.86 -5.19 -8.41 2.08 ...
-    ##  $ -0.685473684210526: num  -5.27 -4.87 -4.97 -8.27 1.6 ...
-    ##  $ -0.580631578947368: num  -4.89 -4.5 -4.65 -7.23 1.43 ...
-    ##  $ -0.475789473684211: num  -3.99 -3.44 -3.72 -5.63 1.04 ...
-    ##  $ -0.370947368421053: num  -3.237 -2.91 -2.943 -4.618 0.967 ...
-    ##  $ -0.266105263157895: num  -2.378 -2.09 -2.029 -3.765 0.534 ...
-    ##  $ -0.161263157894737: num  -1.331 -1.076 -0.824 -2.492 -0.171 ...
-    ##  $ -0.056421052631579: num  -0.359 -0.159 0.246 -0.542 -0.763 ...
-    ##  $ 0.0484210526315789: num  0.3551 0.0876 0.8169 0.4789 -1.1446 ...
-    ##  $ 0.153263157894737 : num  1.473 0.612 1.635 2.763 -1.759 ...
-    ##  $ 0.258105263157895 : num  1.87 1.3 1.96 3.77 -1.92 ...
-    ##  $ 0.362947368421052 : num  2.41 2.02 2.36 4.22 -2.2 ...
-    ##  $ 0.467789473684211 : num  3 2.88 2.57 5.6 -2.48 ...
-    ##  $ 0.572631578947368 : num  4.58 3.89 3.85 7.83 -3.12 ...
-    ##  $ 0.677473684210526 : num  5.78 4.44 4.87 9.62 -3.3 ...
-    ##  $ 0.782315789473684 : num  5.9 5.17 5.26 10.18 -3.95 ...
-    ##  $ 0.887157894736842 : num  6.44 5.69 5.5 11.68 -4 ...
-    ##  $ 0.992             : num  5.49 3.94 4.17 10.06 -4.62 ...
+    ##  $ -1                : num  1.73 -9.58 1.27 1.23 -6.57 ...
+    ##  $ -0.895157894736842: num  2.6 -9.49 2.18 2.11 -5.09 ...
+    ##  $ -0.790315789473684: num  3.9 -8.45 3.38 3.44 -4.81 ...
+    ##  $ -0.685473684210526: num  3.98 -7.78 3.55 3.55 -4.36 ...
+    ##  $ -0.580631578947368: num  3.55 -7.29 3.3 3.21 -4.12 ...
+    ##  $ -0.475789473684211: num  2.96 -6.21 2.89 2.64 -3.53 ...
+    ##  $ -0.370947368421053: num  2.01 -4.95 2.17 1.92 -3 ...
+    ##  $ -0.266105263157895: num  1.66 -3.92 1.72 1.49 -2.43 ...
+    ##  $ -0.161263157894737: num  1.008 -2.44 1.247 0.965 -1.308 ...
+    ##  $ -0.056421052631579: num  -0.2904 -1.5611 -0.0221 -0.2815 -0.9445 ...
+    ##  $ 0.0484210526315789: num  -1.134 0.555 -0.728 -1.063 0.413 ...
+    ##  $ 0.153263157894737 : num  -1.35 1.529 -0.966 -1.363 0.603 ...
+    ##  $ 0.258105263157895 : num  -1.37 2.49 -1.13 -1.32 1.51 ...
+    ##  $ 0.362947368421052 : num  -1.94 3.39 -1.79 -1.77 2.38 ...
+    ##  $ 0.467789473684211 : num  -2.46 5.42 -2.07 -2.02 3.82 ...
+    ##  $ 0.572631578947368 : num  -2.71 7.6 -2.26 -2.09 5.19 ...
+    ##  $ 0.677473684210526 : num  -2.41 9.25 -2.29 -1.98 5.74 ...
+    ##  $ 0.782315789473684 : num  -3.06 10.44 -2.97 -2.58 5.75 ...
+    ##  $ 0.887157894736842 : num  -3.23 11.13 -3.22 -2.69 6.26 ...
+    ##  $ 0.992             : num  -3.44 9.86 -4.27 -3.39 4.49 ...
 
 ``` r
 # compute covariance for data and use this in for mahalanobis distance in the objective
@@ -297,12 +305,12 @@ sp
 ```
 
     ##    feature objective.value runtime split.points best.split
-    ## 1:      x1        9608.916    0.11        -0.05      FALSE
-    ## 2:      x2        9928.067    0.31       0.5735      FALSE
-    ## 3:      x3        9504.177    0.02          0.5       TRUE
-    ## 4:      x4        9578.423    0.01          0.5      FALSE
-    ## 5:      x5        9544.095    0.00          0.5      FALSE
-    ## 6:      x6        9658.817    0.27   -0.4345761      FALSE
+    ## 1:      x1        6508.379    0.05        -0.25      FALSE
+    ## 2:      x2        6693.714    0.11       0.2795      FALSE
+    ## 3:      x3        8763.902    0.00          0.5      FALSE
+    ## 4:      x4        6956.781    0.01          0.5      FALSE
+    ## 5:      x5        6708.608    0.00          0.5      FALSE
+    ## 6:      x6        6208.212    0.16     3.522146       TRUE
 
 ``` r
 node_index = generate_node_index(Y, X, result = sp)
@@ -310,13 +318,12 @@ str(node_index)
 ```
 
     ## List of 2
-    ##  $ class: Factor w/ 2 levels "[0,0.5]","(0.5,1]": 1 1 1 1 2 2 1 1 1 1 ...
+    ##  $ class: Factor w/ 2 levels "[-13.2,3.52]",..: 1 1 1 1 1 1 1 2 1 2 ...
     ##  $ index:List of 2
-    ##   ..$ [0,0.5]: int [1:261] 1 2 3 4 7 8 9 10 16 17 ...
-    ##   ..$ (0.5,1]: int [1:239] 5 6 11 12 13 14 15 23 26 29 ...
+    ##   ..$ [-13.2,3.52]: int [1:361] 1 2 3 4 5 6 7 9 12 13 ...
+    ##   ..$ (3.52,16.3] : int [1:139] 8 10 11 14 18 24 28 30 34 35 ...
 
 ``` r
-Y = as.data.table(Y)
 # frechet distance yields same splits but is a bit slower
 sp_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre,
   n.splits = 1, optimizer = find_best_binary_split)
@@ -324,12 +331,12 @@ sp_frechet
 ```
 
     ##    feature objective.value runtime split.points best.split
-    ## 1:      x1       24230.402    0.70        -0.75      FALSE
-    ## 2:      x2       24105.311    1.45       0.5735      FALSE
-    ## 3:      x3        9486.855    0.05          0.5       TRUE
-    ## 4:      x4       24284.945    0.06          0.5      FALSE
-    ## 5:      x5       24083.349    0.05          0.5      FALSE
-    ## 6:      x6       24192.854    1.23     7.763779      FALSE
+    ## 1:      x1       23126.947    0.26        -0.75      FALSE
+    ## 2:      x2       23073.006    0.75       0.5495      FALSE
+    ## 3:      x3        8958.246    0.02          0.5       TRUE
+    ## 4:      x4       23165.626    0.03          0.5      FALSE
+    ## 5:      x5       23116.535    0.03          0.5      FALSE
+    ## 6:      x6       23118.918    0.63     10.21405      FALSE
 
 ``` r
 node_index_frechet = generate_node_index(Y, X, result = sp_frechet)
@@ -337,10 +344,10 @@ str(node_index_frechet)
 ```
 
     ## List of 2
-    ##  $ class: Factor w/ 2 levels "[0,0.5]","(0.5,1]": 1 1 1 1 2 2 1 1 1 1 ...
+    ##  $ class: Factor w/ 2 levels "[0,0.5]","(0.5,1]": 2 1 2 2 1 2 2 2 2 1 ...
     ##  $ index:List of 2
-    ##   ..$ [0,0.5]: int [1:261] 1 2 3 4 7 8 9 10 16 17 ...
-    ##   ..$ (0.5,1]: int [1:239] 5 6 11 12 13 14 15 23 26 29 ...
+    ##   ..$ [0,0.5]: int [1:257] 2 5 10 11 12 13 16 17 18 19 ...
+    ##   ..$ (0.5,1]: int [1:243] 1 3 4 6 7 8 9 14 15 20 ...
 
 ``` r
 ## dynamic time warping distance yields same splits but is much slower
@@ -361,18 +368,18 @@ str(sp2)
 ```
 
     ## List of 4
-    ##  $ Idx_left       : int [1:261] 1 2 3 4 7 8 9 10 16 17 ...
-    ##  $ Idx_right      : int [1:239] 5 6 11 12 13 14 15 23 26 29 ...
-    ##  $ Feature_number : int 3
-    ##  $ Threshold_value: num 0.5
+    ##  $ Idx_left       : int [1:82] 304 55 76 53 260 214 361 270 299 435 ...
+    ##  $ Idx_right      : int [1:418] 206 342 409 37 183 269 316 397 442 467 ...
+    ##  $ Feature_number : int 6
+    ##  $ Threshold_value: num -4.12
 
 Visualize the results:
 
 ``` r
-plot.data = effect$results$x2
-plot.data$.split = node_index$class[plot.data$.id]
+plot.data = effect$results
+plot.data$.split = node_index_frechet$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
@@ -390,13 +397,13 @@ sp_multiway = split_parent_node(Y = Y, X = X, objective = SS_mah2,
 sp_multiway
 ```
 
-    ##    feature objective.value runtime                                                split.points best.split
-    ## 1:      x1        8814.549    7.27 -0.80016346,-0.73819722,-0.38848881,-0.08998262, 0.34615489       TRUE
-    ## 2:      x2        9809.399    7.09      -0.3111361,-0.1114089, 0.1348027, 0.2402371, 0.5739766      FALSE
-    ## 3:      x3        9504.177    0.02                                                         0.5      FALSE
-    ## 4:      x4        9578.423    0.01                                                         0.5      FALSE
-    ## 5:      x5        9544.095    0.02                                                         0.5      FALSE
-    ## 6:      x6        8990.747    7.75 -5.66802641,-0.09776561, 2.38715653, 4.59670065, 7.84155282      FALSE
+    ##    feature objective.value runtime                                                     split.points best.split
+    ## 1:      x1        5945.708    3.04      -0.29110513,-0.07112716, 0.16457517, 0.25492628, 0.67804064      FALSE
+    ## 2:      x2        6318.039    2.67 -0.412011772,-0.237854306,-0.021853915, 0.005919518, 0.744209572      FALSE
+    ## 3:      x3        8763.902    0.02                                                              0.5      FALSE
+    ## 4:      x4        6956.781    0.00                                                              0.5      FALSE
+    ## 5:      x5        6708.608    0.02                                                              0.5      FALSE
+    ## 6:      x6        5643.052    3.32      -3.02324571,-0.07438653, 1.80379538, 4.99053197, 7.30506479       TRUE
 
 ``` r
 node_index_multiway = generate_node_index(Y, X, result = sp_multiway)
@@ -404,19 +411,19 @@ str(node_index_multiway)
 ```
 
     ## List of 2
-    ##  $ class: Factor w/ 6 levels "[-1,-0.8]","(-0.8,-0.738]",..: 3 4 3 5 3 2 4 6 5 4 ...
+    ##  $ class: Factor w/ 6 levels "[-13.2,-3.02]",..: 2 4 1 2 4 2 2 5 4 4 ...
     ##  $ index:List of 6
-    ##   ..$ [-1,-0.8]      : int [1:32] 20 26 31 34 72 73 74 88 134 140 ...
-    ##   ..$ (-0.8,-0.738]  : int [1:33] 6 15 40 77 81 95 127 129 130 180 ...
-    ##   ..$ (-0.738,-0.388]: int [1:90] 1 3 5 16 19 30 33 39 43 53 ...
-    ##   ..$ (-0.388,-0.09] : int [1:91] 2 7 10 12 13 14 22 35 36 46 ...
-    ##   ..$ (-0.09,0.346]  : int [1:102] 4 9 21 24 25 38 44 48 50 54 ...
-    ##   ..$ (0.346,1]      : int [1:152] 8 11 17 18 23 27 28 29 32 37 ...
+    ##   ..$ [-13.2,-3.02]  : int [1:102] 3 15 21 23 32 33 37 43 47 50 ...
+    ##   ..$ (-3.02,-0.0744]: int [1:120] 1 4 6 7 12 13 22 26 29 38 ...
+    ##   ..$ (-0.0744,1.8]  : int [1:76] 17 19 25 31 48 49 52 59 67 70 ...
+    ##   ..$ (1.8,4.99]     : int [1:111] 2 5 9 10 16 20 24 27 30 40 ...
+    ##   ..$ (4.99,7.31]    : int [1:35] 8 11 14 34 36 64 65 77 85 109 ...
+    ##   ..$ (7.31,16.3]    : int [1:56] 18 28 35 39 42 51 62 63 66 81 ...
 
 ``` r
 plot.data$.split = node_index_multiway$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
@@ -426,32 +433,18 @@ Instead, using a distance measure that is suited for curves (e.g.,
 frechet distance) works:
 
 ``` r
-sp_multiway_frechet = split_parent_node(Y = Y, X = X, objective = SS_fre, 
+sp_multiway_frechet = split_parent_node(Y = Y, X = X, objective = SS_L1, 
   n.splits = 5, optimizer = find_best_multiway_split_mals)
 sp_multiway_frechet
 ```
 
-    ##    feature objective.value runtime                                           split.points best.split
-    ## 1:      x1       24188.514   15.36 -0.7545131,-0.6287841, 0.2849719, 0.3824737, 0.4633514      FALSE
-    ## 2:      x2       23782.114   16.94 -0.8992108,-0.6935388,-0.1034777, 0.1762214, 0.5223453      FALSE
-    ## 3:      x3        9486.855    0.04                                                    0.5       TRUE
-    ## 4:      x4       24284.945    0.03                                                    0.5      FALSE
-    ## 5:      x5       24083.349    0.05                                                    0.5      FALSE
-    ## 6:      x6       23762.589   15.36      -2.441396,-1.985565,-1.712882, 3.181584, 7.119210      FALSE
-
-``` r
-sp_multiway_frechet2 = split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = 5, optimizer = find_best_multiway_split_gensa)
-sp_multiway_frechet2
-```
-
     ##    feature objective.value runtime                                                split.points best.split
-    ## 1:      x1       24170.566   13.30      -0.8685255,-0.7890449, 0.5514222, 0.7171131, 0.9249409      FALSE
-    ## 2:      x2       23465.946   20.72 -0.82587141,-0.69706912, 0.02275426, 0.52192488, 0.94283539      FALSE
-    ## 3:      x3        9486.855    0.06                                                         0.5       TRUE
-    ## 4:      x4       24284.945    0.03                                                         0.5      FALSE
-    ## 5:      x5       24083.349    0.05                                                         0.5      FALSE
-    ## 6:      x6       23880.579   17.79      -5.3865725, 0.0754087, 1.5499594, 4.8156797, 7.6484134      FALSE
+    ## 1:      x1        26380.41    2.47 -0.79959517,-0.09309034, 0.02778196, 0.42654583, 0.91347557      FALSE
+    ## 2:      x2        26737.43    2.48 -0.65945636,-0.42067981,-0.11334743, 0.02222543, 0.53222254      FALSE
+    ## 3:      x3        12435.55    0.00                                                         0.5       TRUE
+    ## 4:      x4        27577.58    0.00                                                         0.5      FALSE
+    ## 5:      x5        27256.58    0.00                                                         0.5      FALSE
+    ## 6:      x6        26332.35    2.53      -5.9682952,-1.3440609,-0.8984664, 0.9986572, 8.3414951      FALSE
 
 ``` r
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multiway_frechet)
@@ -459,15 +452,15 @@ str(node_index_multiway_frechet)
 ```
 
     ## List of 2
-    ##  $ class: Factor w/ 2 levels "[0,0.5]","(0.5,1]": 1 1 1 1 2 2 1 1 1 1 ...
+    ##  $ class: Factor w/ 2 levels "[0,0.5]","(0.5,1]": 2 1 2 2 1 2 2 2 2 1 ...
     ##  $ index:List of 2
-    ##   ..$ [0,0.5]: int [1:261] 1 2 3 4 7 8 9 10 16 17 ...
-    ##   ..$ (0.5,1]: int [1:239] 5 6 11 12 13 14 15 23 26 29 ...
+    ##   ..$ [0,0.5]: int [1:257] 2 5 10 11 12 13 16 17 18 19 ...
+    ##   ..$ (0.5,1]: int [1:243] 1 3 4 6 7 8 9 14 15 20 ...
 
 ``` r
 plot.data$.split = node_index_multiway_frechet$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 
@@ -484,17 +477,19 @@ X = dat[, setdiff(colnames(dat), "y")]
 
 # Fit model and compute ICE for x2
 mod = ranger(y ~ ., data = dat, num.trees = 1000)
-pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
+pred = function(model, newdata) predict(model, newdata)$predictions
 model = Predictor$new(mod, data = X, y = dat$y, predict.function = pred)
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "x2")
+effect = FeatureEffect$new(model, method = "ice", grid.size = 20, feature = "x2")
 
-Y = spread(effect$results$x2, .borders, .value)
-Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+eff = as.data.table(effect$results)
 # Center ICE curves
-Y = as.data.frame(t(apply(Y, MARGIN = 1, function(x) x - mean(x))))
+eff = as.data.frame(eff[, .value := (.value - mean(.value)), by = c(".type", ".id")])
+Y = spread(eff, x2, .value)
+Y = Y[, setdiff(colnames(Y), c(".type", ".id"))]
+#Y = as.data.frame(t(apply(Y, MARGIN = 1, function(x) x - mean(x))))
 
 # Plot ICE curves: WE WANT TO FIND SUBGROUPS SUCH THAT ICE KURVES ARE HOMOGENOUS
-ggplot(effect$results$x2, aes(x = .borders, y = .value)) + 
+ggplot(eff, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id))
 ```
 
@@ -502,7 +497,7 @@ ggplot(effect$results$x2, aes(x = .borders, y = .value)) +
 
 ``` r
 sp_multi = lapply(1:5, function(i) {
-  split_parent_node(Y = Y, X = X, objective = SS_fre, 
+  split_parent_node(Y = Y, X = X, objective = SS_L1, 
   n.splits = i, optimizer = find_best_multiway_split_mals, min.node.size = 10)
 })
 results = rbindlist(sp_multi, idcol = "n.splits")
@@ -510,48 +505,39 @@ results[results$best.split, ]
 ```
 
     ##    n.splits feature objective.value runtime                                           split.points best.split
-    ## 1:        1      x6        18666.87    0.77                                               2.984044       TRUE
-    ## 2:        2      x6        14898.47   10.56                                    0.5183521,4.0783396       TRUE
-    ## 3:        3      x6        13866.54    9.47                          -2.619075, 1.684040, 4.204328       TRUE
-    ## 4:        4      x6        12877.82    9.00            -2.1047868, 0.8423284, 3.4345772, 5.0876454       TRUE
-    ## 5:        5      x6        12693.08    9.52 -6.2010461,-2.9143307, 0.8199286, 3.3447245, 4.9814666       TRUE
+    ## 1:        1      x6        21284.14    0.09                                               2.882483       TRUE
+    ## 2:        2      x6        17838.40    1.59                                    -1.688254, 3.354293       TRUE
+    ## 3:        3      x6        16255.42    2.02                          -1.706260, 2.932758, 6.184294       TRUE
+    ## 4:        4      x6        15330.48    2.61            -2.9918145,-0.1979552, 3.2592608, 5.4842312       TRUE
+    ## 5:        5      x6        14813.75    2.55 -7.2839063,-2.4437992, 0.1900059, 3.1209954, 6.9797374       TRUE
 
 ``` r
-sp_multi2 = lapply(1:5, function(i) {
-  split_parent_node(Y = Y, X = X, objective = SS_fre, 
-  n.splits = i, optimizer = find_best_multiway_split_gensa, min.node.size = 10)
-})
-results2 = rbindlist(sp_multi2, idcol = "n.splits")
-results2[results2$best.split, ]
-```
+# sp_multi2 = lapply(1:5, function(i) {
+#   split_parent_node(Y = Y, X = X, objective = SS_L1, 
+#   n.splits = i, optimizer = find_best_multiway_split_gensa, min.node.size = 10)
+# })
+# results2 = rbindlist(sp_multi2, idcol = "n.splits")
+# results2[results2$best.split, ]
 
-    ##    n.splits feature objective.value runtime                                           split.points best.split
-    ## 1:        1      x6        18666.87    0.68                                               2.984044       TRUE
-    ## 2:        2      x6        14903.15    5.87                                    0.1771435,4.0839128       TRUE
-    ## 3:        3      x6        13653.56    7.11                       -2.9133310, 0.8229737, 4.0884957       TRUE
-    ## 4:        4      x6        12847.95    6.16            -2.9177453, 0.7858075, 3.3536353, 5.3530471       TRUE
-    ## 5:        5      x6        12756.06    7.82 -2.9121351, 0.7948091, 3.4649012, 5.0985576, 8.5108867       TRUE
-
-``` r
 node_index_multiway_frechet = generate_node_index(Y, X, result = sp_multi[[5]])
 str(node_index_multiway_frechet)
 ```
 
     ## List of 2
-    ##  $ class: Factor w/ 6 levels "[-19.3,-6.2]",..: 4 3 4 4 6 6 4 1 4 5 ...
+    ##  $ class: Factor w/ 6 levels "[-13.2,-7.28]",..: 3 4 2 3 4 3 3 5 4 5 ...
     ##  $ index:List of 6
-    ##   ..$ [-19.3,-6.2]: int [1:39] 8 52 67 69 86 104 120 134 144 154 ...
-    ##   ..$ (-6.2,-2.91]: int [1:89] 13 15 18 29 30 36 50 53 54 58 ...
-    ##   ..$ (-2.91,0.82]: int [1:116] 2 11 22 26 34 46 55 57 70 73 ...
-    ##   ..$ (0.82,3.34] : int [1:98] 1 3 4 7 9 16 24 27 32 37 ...
-    ##   ..$ (3.34,4.98] : int [1:56] 10 12 17 23 25 42 44 56 63 65 ...
-    ##   ..$ (4.98,14.8] : int [1:102] 5 6 14 19 20 21 28 31 33 35 ...
+    ##   ..$ [-13.2,-7.28]: int [1:20] 15 53 55 76 79 117 163 211 214 260 ...
+    ##   ..$ (-7.28,-2.44]: int [1:100] 3 21 23 32 33 37 43 47 50 69 ...
+    ##   ..$ (-2.44,0.19] : int [1:115] 1 4 6 7 12 13 19 22 26 29 ...
+    ##   ..$ (0.19,3.12]  : int [1:112] 2 5 9 16 17 20 25 27 31 48 ...
+    ##   ..$ (3.12,6.98]  : int [1:91] 8 10 11 14 24 30 40 41 64 65 ...
+    ##   ..$ (6.98,16.3]  : int [1:62] 18 28 34 35 36 39 42 51 62 63 ...
 
 ``` r
-plot.data = effect$results$x2
+plot.data = effect$results
 plot.data$.split = node_index_multiway_frechet$class[plot.data$.id]
 
-ggplot(plot.data, aes(x = .borders, y = .value)) + 
+ggplot(plot.data, aes(x = x2, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 ```
 

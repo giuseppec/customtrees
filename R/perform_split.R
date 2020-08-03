@@ -12,12 +12,17 @@
 #' @export
 #' @example inst/examples/perform_split.R
 #'
+#'
 perform_split = function(split.points, xval, y, min.node.size, objective) {
   # args = formalArgs(objective)
   # deparse(body(objective))
   # always increasing split points
   # split.points = xval[split.points] # integer optim
+
   split.points = sort.int(split.points)
+  split.points = get_closest_point(split.points, xval, min.node.size)
+  #cat(split.points, fill = TRUE)
+
   # assign intervalnr. according to split points
   node.number = findInterval(x = xval, split.points, rightmost.closed = TRUE) + 1
   # compute size of each childnode
