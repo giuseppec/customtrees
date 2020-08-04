@@ -1,27 +1,29 @@
-# Anpassung: 
-# Parameter feat mit übergeben - für feat selbst wird optimizer nicht berechnet, da keine Interaktion zu sich selbst untersucht wird
-# Parameter extrapol (True oder False, abhängig, ob Extrapolationsproblem beachtet werden soll oder nicht)
-split_parent_node = function(Y, X, feat, n.splits = 1, min.node.size = 1, optimizer, objective, ...) { 
+split_parent_node = function(Y, X, n.splits = 1, min.node.size = 10, optimizer,
+  objective, ...) {
+  require(data.table)
   assert_data_frame(X)
   #assert_choice(target.col, choices = colnames(data))
   assert_integerish(n.splits)
   assert_integerish(min.node.size)
   assert_function(objective, args = c("y", "x", "requires.x"))
   assert_function(optimizer, args = c("xval", "y"))
-  
-  # find best split points per feature - TODO: adjusted that not splitted after ICE variable - option to choose?
-  opt.feature = lapply(X[,-which(colnames(X) == feat)], function(xval) {
-    optimizer(feat = feat, x = X, xval = xval, y = Y, n.splits = n.splits, min.node.size = min.node.size, 
-              objective = objective, ...) 
+
+  # find best split points per feature
+  opt.feature = lapply(X, function(feat) {
+    t1 = proc.time()
+    res = optimizer(x = feat, y = Y, n.splits = n.splits, min.node.size = min.node.size,
+      objective = objective, ...)
+    t2 = proc.time()
+    res$runtime = (t2 - t1)[[3]]
+    return(res)
   })
-  
-  result = rbindlist(lapply(opt.feature, as.data.frame), idcol = "feature")
-  result = result[, .(split.points = list(split.points)), by = c("feature", "objective.value"), with = TRUE]
+
+  result = data.table::rbindlist(lapply(opt.feature, as.data.frame), idcol = "feature")
+  result = result[, .(split.points = list(split.points)), by = c("feature", "objective.value", "runtime"), with = TRUE]
   result$best.split = result$objective.value == min(result$objective.value)
   #result = result[, best.split := objective.value == min(objective.value)]
   return(result)
 }
-
 
 generate_node_index = function(Y, X, result) {
   assert_data_table(result)

@@ -1,10 +1,11 @@
-
+library(devtools)
+load_all()
 # simulation example to test  functions
-source("R/perform_split.r")
-source("R/split_optimizer.r")
-source("R/split_parent_node.r")
-source("R/helper_functions.r")
-source("R/detect_interactions.r")
+#source("R/perform_split.r")
+#source("R/split_optimizer.r")
+#source("R/split_parent_node.r")
+source("playground/helper_functions.r")
+#source("R/detect_interactions.r")
 
 # 1. Extrapolation Example
 
@@ -48,7 +49,9 @@ ggplot(effect$results$z, aes(x = .borders, y = .value)) +
 #------------------------------------------------------------------------------------------------------------
 # test plotting with extrapolation
 
-res = split_parent_node(Y = Y, X = X, feat = "z", optimizer = find_best_multiway_split2, n.splits = 1, objective = SS_fre_filtered, min.node.size = 10)
+res = split_parent_node(Y = Y, X = X[,-which(colnames(X) == "z")], 
+  optimizer = find_best_multiway_split, n.splits = 1, objective = SS_fre_filtered, min.node.size = 10,
+  feat = "z", x.all = X)
 ice = get_ice_curves(X = X, Y = Y, result = res)
 
 
@@ -64,8 +67,10 @@ ggplot(plot.data, aes(x = .borders, y = .value)) +
 # test interaction functions
 
 
-potential.interactions = find_potential_interactions(X, model, find_best_multiway_split2, SS_fre_filtered, SS_fre, 3, min.node.size = 10, improve.first.split = 0.1, improve.n.splits = 0.1)
-interactions = find_true_interactions(X, model, find_best_multiway_split2)
+potential.interactions = find_potential_interactions(X, model, find_best_multiway_split, SS_fre_filtered, SS_fre, 3, min.node.size = 10, improve.first.split = 0.1, improve.n.splits = 0.1,
+  x.all = X)
+interactions = find_true_interactions(X, model, find_best_multiway_split, 
+  x.all = X)
 
 # compare with hstatistics
 ia1 = Interaction$new(model, feature = "z", grid.size = 20)
@@ -80,7 +85,7 @@ ia = Interaction$new(model, grid.size = 20)
 #-------------------------------------------------------------------------------------------------------------
 # simulation studies with correlated features
 
-source("R/helper_functions_sim.r")
+source("playground/helper_functions_sim.r")
 
 # generate data
 p = 6
@@ -109,8 +114,10 @@ pred = predict.function = function(model, newdata) predict(model, newdata)$predi
 model = Predictor$new(mod, data = X, y = y, predict.function = pred)
 
 # interactions # todo: Fehler bei "ind" nochmal testen
-potential.interactions = find_potential_interactions(X, model, find_best_multiway_split2, SS_fre_filtered, SS_fre, 3, min.node.size = 30, improve.first.split = 0.1, improve.n.splits = 0.1)
-find_true_interactions(X, model, find_best_multiway_split2)
+potential.interactions = find_potential_interactions(X, model, find_best_multiway_split, SS_fre_filtered, SS_fre, 3, min.node.size = 30, improve.first.split = 0.1, improve.n.splits = 0.1, 
+  x.all = X)
+find_true_interactions(X, model, find_best_multiway_split, 
+  x.all = X)
 interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
 #saveRDS(interactions, "interactions.rds")
 # zu hohe improvements durchweg - gefilterte objective funktioniert hier nicht - kann ungefilterte einfach 
@@ -134,7 +141,8 @@ for (i in 1:nrow(Y)) {
 }
 
 
-res = split_parent_node(Y, X, feat = "V3", n.splits = 1, min.node.size = 30, optimizer = find_best_multiway_split2, extrapol = TRUE, objective = SS_fre_filtered)
+res = split_parent_node(Y, X[,-which(colnames(X) == "V3")], n.splits = 1, min.node.size = 30, optimizer = find_best_multiway_split, extrapol = TRUE, objective = SS_fre_filtered,
+  feat = "V3", x.all = X)
 
 ice = get_ice_curves(X = X, Y = Y, result = res)
 

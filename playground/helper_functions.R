@@ -10,52 +10,67 @@ library(kmlShape)
 library(dtw)
 library(tidyr)
 
+# Frechet distance FDA measure
+# SS_fre = function(y, x, requires.x = FALSE, ...) { # slow
+#   # using only y-axis of curves is enough as x-axis is always the same for all curves
+#   require(kmlShape)
+#   center = colMeans(y)
+#   grid.x = as.numeric(names(center))
+#   pdp.y = unname(center)
+#   dist = apply(y, 1, function(ice) distFrechet(grid.x, pdp.y, grid.x, ice, FrechetSumOrMax = "sum"))
+#   sum(dist)
+# }
+# 
+# # Frechet distance measure - with filtered ice curves
+# SS_fre_filtered = function(y, x, sub.number, requires.x = FALSE, feat, x.all, ...) {
+#   require(kmlShape)
+#   # use only ice curves that are available for the combination of the two features -> no extrapolation
+#   indices = filter(feat, x.all, y, sub.number)
+#   y.filtered = y[,indices, drop = FALSE]
+#   center = colMeans(y.filtered)
+#   grid.x = as.numeric(names(center))
+#   pdp.y = unname(center)
+#   dist = apply(y.filtered, 1, function(ice) distFrechet(grid.x, pdp.y, grid.x, ice, FrechetSumOrMax = "sum"))
+#   sum(dist)*20/length(indices)
+# }
 
-# Frechet distance measure (sum of squares)
-SS_fre = function(y, xval, sub.number = NULL, requires.x = FALSE, ...) { # slow
-  # using only y-axis of curves is enough as x-axis is always the same for all curves
-  require(kmlShape)
-  center = colMeans(y)
-  grid.x = as.numeric(names(center))
-  pdp.y = unname(center)
-  dist = apply(y, 1, function(ice) distFrechet(grid.x, pdp.y, grid.x, ice, FrechetSumOrMax = "sum"))
-  sum(dist)
+SS_fre = function(y, x, requires.x = FALSE, ...) { # slow
+  require(Rfast)
+  ypred = Rfast::colMedians(as.matrix(y))
+  sum(t(abs(t(y) - ypred)))
 }
 
 # Frechet distance measure - with filtered ice curves
-SS_fre_filtered = function(y, xval, x, sub.number, requires.x = FALSE, feat,...) { 
-  require(kmlShape)
+SS_fre_filtered = function(y, x, sub.number, requires.x = FALSE, feat, x.all, ...) {
+  require(Rfast)
+  ycols = ncol(y)
   # use only ice curves that are available for the combination of the two features -> no extrapolation
-  indices = filter(feat, x, y, sub.number)
+  indices = filter(feat, x.all, y, sub.number)
   y.filtered = y[,indices, drop = FALSE]
-  center = colMeans(y.filtered)
-  grid.x = as.numeric(names(center))
-  pdp.y = unname(center)
-  dist = apply(y.filtered, 1, function(ice) distFrechet(grid.x, pdp.y, grid.x, ice, FrechetSumOrMax = "sum"))
-  sum(dist)*20/length(indices)
+  dist = SS_fre(y.filtered)
+  sum(dist)*ycols/length(indices)
 }
-
 
 # NEW:
 # Filter function to use only ice curves within grid points to find best split point
 # not yet included: categorical features (only numeric and one-hot-encoded)
 # needs to be integrated in objective
-filter = function(feat, x, Y, sub.number){
-  values = unique(x[sub.number,feat])
-  if (length(unique(x[,feat])) > 2) {
+filter = function(feat, x.all, Y, sub.number){
+  values = unique(x.all[sub.number,feat])
+  if (length(unique(x.all[,feat])) > 2) {
     grid.points = as.numeric(names(Y))
     break.points = grid.points[1:(length(grid.points) - 1)] + (grid.points[2:length(grid.points)] - grid.points[1:(length(grid.points) - 1)]) / 2
-    range = cut(values, breaks = c(min(x[,feat]), break.points, max(x[,feat])), labels = c(names(Y)), include.lowest = TRUE, right = TRUE)
+    range = cut(values, breaks = c(min(x.all[,feat]), break.points, max(x.all[,feat])), labels = c(names(Y)), include.lowest = TRUE, right = TRUE)
     return(which(names(Y) %in% unique(range)))
   }
-  else if (length(unique(x[,feat])) == length(values)) {
+  else if (length(unique(x.all[,feat])) == length(values)) {
     return(c(1:length(names(Y))))
   }
-  else if (length(values) == 1 & length(unique(x[,feat])) == 2) {
-    if (values < mean(unique(x[,feat]))) {
+  else if (length(values) == 1 & length(unique(x.all[,feat])) == 2) {
+    if (values < mean(unique(x.all[,feat]))) {
       return(c(1:round(ncol(Y)/2,0)))
     }
-    else if (values > mean(unique(X[,feat]))) {
+    else if (values > mean(unique(x.all[,feat]))) {
       return(c(round(ncol(Y)/2,0):ncol(Y)))
     }
   }

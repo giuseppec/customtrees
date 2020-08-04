@@ -1,10 +1,12 @@
-# test with true model
+library(devtools)
+load_all()
 
-source("R/perform_split.r")
-source("R/split_optimizer.r")
-source("R/split_parent_node.r")
-source("R/helper_functions.r")
-source("R/detect_interactions.r")
+# test with true model
+#source("R/perform_split.r")
+#source("R/split_optimizer.r")
+#source("R/split_parent_node.r")
+source("playground/helper_functions.r")
+#source("R/detect_interactions.r")
 
 # 1. Extrapolation Example
 
@@ -43,7 +45,7 @@ effectd = FeatureEffects$new(predictor = mod, method = "ice", grid.size = 20, fe
 effectd$plot()
 
 # calculate interactions
-potential.interactions = find_potential_interactions(X, mod, find_best_multiway_split2, SS_fre_filtered, SS_fre, 1, min.node.size = 30, improve.first.split = 0, improve.n.splits = 0)
+potential.interactions = find_potential_interactions(X, mod, find_best_multiway_split, SS_fre_filtered, SS_fre, n.splits = 1, min.node.size = 30, improve.first.split = 0, improve.n.splits = 0, x.all = X)
 interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
 
 # compare to HStatistics
@@ -55,7 +57,7 @@ ia4 = Interaction$new(mod, feature = "x6", grid.size = 20)
 #-------------------------------------------------------------------------------------------------------------
 # simulation studies with correlated features
 
-source("R/helper_functions_sim.r")
+source("playground/helper_functions_sim.r")
 
 # generate data
 p = 6
@@ -89,10 +91,11 @@ predict.mymodel = function(object, newdata) {
   p = object$fun(newdata)
   p + rnorm(length(p), mean = 0, sd = 0.1)
 }
-
+test = predict(mymodel, dat)
+mod = Predictor$new(model = mymodel, data = X, predict.function = predict.mymodel)
 
 # interactions # todo: Fehler bei "ind" nochmal testen
-potential.interactions = find_potential_interactions(X, mod, find_best_multiway_split2, SS_fre_filtered, SS_fre, 1, min.node.size = 30, improve.first.split = 0, improve.n.splits = 0)
+potential.interactions = find_potential_interactions(X, mod, find_best_multiway_split, SS_fre_filtered, SS_fre, 1, min.node.size = 30, improve.first.split = 0, improve.n.splits = 0, x.all = X)
 interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
 #find_true_interactions(X, mod, find_best_multiway_split2, n.splits = 1)
 
@@ -121,19 +124,12 @@ ggplot(effect$results$V4, aes(x = .borders, y = .value)) +
 
 
 # splitted ice curves
-res = split_parent_node(Y = Y, X = X, feat = "V4", optimizer = find_best_multiway_split2, n.splits = 5, objective = SS_fre_filtered, min.node.size = 10)
+res = split_parent_node(Y = Y, X = X[,-which(colnames(X) == "V4")], optimizer = find_best_multiway_split, n.splits = 5, objective = SS_fre_filtered, min.node.size = 10,
+  feat = "V4", x.all = X)
 ice = get_ice_curves(X = X, Y = Y, result = res, extrapol = FALSE)
-
 
 plot.data = plot.prep.full(ice)
 
 # Plot splitted ICE curves
 ggplot(plot.data, aes(x = .borders, y = .value)) + 
   geom_line(aes(group = .id)) + facet_grid(~ .split)
-
-
-
-
-
-
-
