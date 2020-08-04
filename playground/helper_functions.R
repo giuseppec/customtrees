@@ -10,7 +10,7 @@ library(kmlShape)
 library(dtw)
 library(tidyr)
 
-# Frechet distance FDA measure
+# # Frechet distance FDA measure
 # SS_fre = function(y, x, requires.x = FALSE, ...) { # slow
 #   # using only y-axis of curves is enough as x-axis is always the same for all curves
 #   require(kmlShape)
@@ -35,19 +35,21 @@ library(tidyr)
 # }
 
 SS_fre = function(y, x, requires.x = FALSE, ...) { # slow
-  require(Rfast)
-  ypred = Rfast::colMedians(as.matrix(y))
+  #require(Rfast)
+  ypred = apply(y, 2, median) #Rfast::colMedians(as.matrix(y))
   sum(t(abs(t(y) - ypred)))
 }
 
 # Frechet distance measure - with filtered ice curves
 SS_fre_filtered = function(y, x, sub.number, requires.x = FALSE, feat, x.all, ...) {
-  require(Rfast)
   ycols = ncol(y)
   # use only ice curves that are available for the combination of the two features -> no extrapolation
   indices = filter(feat, x.all, y, sub.number)
   y.filtered = y[,indices, drop = FALSE]
-  dist = SS_fre(y.filtered)
+
+  ypred = apply(y.filtered, 2, median) #Rfast::colMedians(as.matrix(y))
+  dist = sum(t(abs(t(y.filtered) - ypred)))
+  
   sum(dist)*ycols/length(indices)
 }
 
