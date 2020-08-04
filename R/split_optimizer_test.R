@@ -1,3 +1,103 @@
+# Optimization with Hooke-Jeeves and restarts
+find_best_multiway_split_hjn = function(xval, y, n.splits = 1, min.node.size = 10,
+  objective, control = NULL, ...) {
+  n.splits = adjust_nsplits(xval, n.splits)
+  # if only one split is needed, we use exhaustive search
+  if (n.splits == 1)
+    return(find_best_binary_split(xval, y, n.splits = n.splits, min.node.size = min.node.size,
+      objective = objective))
+  
+  if (is.null(control))
+    control = list(maxfeval = 640, maxrestarts = 3)
+  
+  # find optimal split points constrained optimization
+  n.quantiles = NULL #min(4*n.splits, 40)
+  candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
+  
+  lower = rep(min(xval), n.splits)
+  upper = rep(max(xval), n.splits)
+  #init = lhs::randomLHS(control$maxrestarts, n.splits)
+  #init = apply(init, 2, sort)
+  #init = apply(init, 1, function(x) lower[1] + (upper[1] - lower[1])*x)
+  init = replicate(control$maxrestarts, sort.int(sample(candidate, size = n.splits)))
+  #init = sort.int(sample(candidate, size = n.splits))
+  
+  best = vector("list", length = control$maxrestarts)
+  i = 1
+  funeval = 0
+  while (i <= control$maxrestarts & funeval < control$maxfeval) {
+    best[[i]] = optimx::hjn(par = init[, i], fn = perform_split, lower = lower, upper = upper,
+      xval = xval, y = y, min.node.size = min.node.size, objective = objective, control = control)
+    funeval = funeval + best[[i]]$counts[1]
+    i = i + 1
+  }
+  best = best[[which.min(unlist(lapply(best, function(x) x$value)))]]
+  
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
+}
+
+# Optimization with Hooke-Jeeves derivative-free (fast, for low dimensions gets stuck in local minima -> restarts?)
+find_best_multiway_split_hjkb = function(xval, y, n.splits = 1, min.node.size = 10,
+  objective, control = NULL, ...) {
+  n.splits = adjust_nsplits(xval, n.splits)
+  # if only one split is needed, we use exhaustive search
+  if (n.splits == 1)
+    return(find_best_binary_split(xval, y, n.splits = n.splits, min.node.size = min.node.size,
+      objective = objective))
+  
+  if (is.null(control))
+    control = list(maxfeval = 640, tol = 1e-4)
+  
+  # find optimal split points constrained optimization
+  n.quantiles = NULL #min(4*n.splits, 40)
+  candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
+  init = sort.int(sample(candidate, size = n.splits))
+  # init = lapply(1:10, function(i) sort.int(sample(candidate, size = n.splits))) #candidate[1:n.splits]
+  # init.eval = vapply(init, perform_split,
+  #   xval = xval, y = y, min.node.size = min.node.size, objective = objective,
+  #   FUN.VALUE = NA_real_, USE.NAMES = FALSE)
+  # init = init[[which.min(init.eval)]]
+  
+  lower = rep(min(xval), n.splits)
+  upper = rep(max(xval), n.splits)
+  best = dfoptim::hjkb(par = init, fn = perform_split, lower = lower, upper = upper, control = control,
+    xval = xval, y = y, min.node.size = min.node.size, objective = objective)
+  
+  # best = dfoptim::hjkb(par = sort.int(best$par), fn = perform_split, lower = lower, upper = upper, control = control,
+  #   xval = xval, y = y, min.node.size = min.node.size, objective = objective)
+  
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
+}
+
+# Optimization with GenSA
+find_best_multiway_split_gensa = function(xval, y, n.splits = 1, min.node.size = 10,
+  objective, control = NULL, ...) {
+  n.splits = adjust_nsplits(xval, n.splits)
+  # if only one split is needed, we use exhaustive search
+  if (n.splits == 1)
+    return(find_best_binary_split(xval, y, n.splits = n.splits,
+      min.node.size = min.node.size, objective = objective))
+  
+  # generate initial population
+  n.quantiles = NULL
+  candidate = generate_split_candidates(xval, n.quantiles = n.quantiles, min.node.size = min.node.size)
+  init = sort.int(sample(candidate, size = n.splits))
+  
+  if (is.null(control))
+    control = list(max.call = 640, nb.stop.improvement = min(20*n.splits, 100), smooth = FALSE)
+  
+  # possible lower and upper values
+  lower = rep(min(xval), n.splits)
+  upper = rep(max(xval), n.splits)
+  
+  # optimization function
+  best = GenSA::GenSA(par = init, fn = perform_split, lower = lower, upper = upper,
+    control = control, xval = xval, y = y, min.node.size = min.node.size, objective = objective)
+  
+  return(list(split.points = sort.int(best$par), objective.value = best$value))
+}
+
+
 # Optimization with
 find_best_multiway_split_mbo = function(xval, y, n.splits = 1, min.node.size = 10,
   objective, control = NULL, ...) {

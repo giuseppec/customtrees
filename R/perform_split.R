@@ -13,7 +13,7 @@
 #' @example inst/examples/perform_split.R
 #'
 #'
-perform_split = function(split.points, xval, y, min.node.size, objective) {
+perform_split = function(split.points, xval, y, min.node.size, objective, ...) {
   # args = formalArgs(objective)
   # deparse(body(objective))
   # always increasing split points
@@ -40,7 +40,7 @@ perform_split = function(split.points, xval, y, min.node.size, objective) {
       x.list = NULL
 
   res = vapply(seq_along(y.list), FUN = function(i) {
-    objective(y = y.list[[i]], x = x.list[[i]])
+    objective(y = y.list[[i]], x = x.list[[i]], sub.number = which(node.number == i), ...)
   }, FUN.VALUE = NA_real_, USE.NAMES = FALSE)
   sum(res)
 }
@@ -50,7 +50,7 @@ perform_split.factor = function(split.points, xval, y, min.node.size, objective)
   lev = levels(xval)
   xval = as.numeric(xval)
   split.points = which(lev %in% split.points)
-  perform_split(xval = xval, split.points = split.points, y = y, min.node.size = min.node.size, objective = objective)
+  perform_split.numeric(xval = xval, split.points = split.points, y = y, min.node.size = min.node.size, objective = objective)
 }
 
 # perform_split2 = function(split.points, x, y, min.node.size = 10, objective) {

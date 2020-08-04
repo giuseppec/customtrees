@@ -73,14 +73,12 @@ SS_mah = function(y, x, requires.x = FALSE, cov = NULL) {
 # point-wise L1 distance (is this frechet distance if grids are the same?)
 SS_L1 = function(y, x, requires.x = FALSE) {
   require(Rfast)
-  n = nrow(y)
   ypred = Rfast::colMedians(as.matrix(y))
   sum(t(abs(t(y) - ypred)))
 }
 
 # point-wise L2 distance
 SS_L2 = function(y, x, requires.x = FALSE) {
-  n = nrow(y)
   ypred = colMeans(y)
   sum(t((t(y) - ypred)^2))
 }
