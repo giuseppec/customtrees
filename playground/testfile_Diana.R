@@ -88,7 +88,7 @@ ggplot(plot.data, aes(x = .borders, y = .value)) +
 # number of splits depends on the relative improvement which has to be at least
 # improve.n.splits. The number is limited by n.splits. You can play here around as well
 
-
+rm(res)
 potential.interactions = find_potential_interactions(x = X, model = model, optimizer = find_best_multiway_split, objective.split = SS_fre, objective.total = SS_fre, 
                                                      n.splits = 5, min.node.size = 10, improve.first.split = 0.1, improve.n.splits = 0.1, 
                                                      x.all = X)

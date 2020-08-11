@@ -24,16 +24,17 @@ interactions_per_feature = function(x, y, feat, n.splits, min.node.size, optimiz
 find_potential_interactions = function(x, model, optimizer, objective.split, objective.total, n.splits = 3, min.node.size = 1, improve.first.split = 0.1, improve.n.splits = 0.1, ...){
   p = ncol(x)
   for (i in 1:p) {
-    effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = colnames(x)[i])
+    effect = FeatureEffect$new(model, method = "ice", grid.size = 20, feature = colnames(x)[i])
     # Get ICE values and arrange them in a horizontal matrix
-    Y = spread(effect$results[[colnames(x)[i]]], .borders, .value)
-    Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
+    colnames(effect$results)[1] = ".borders"
+    Y = spread(effect$results, .borders, .value)
+    Y = Y[, setdiff(colnames(Y), c(".type", ".id"))]
     for (j in 1:nrow(Y)) {
       Y[j,] = as.numeric(unname(Y[j,])) - mean(as.numeric(unname(Y[j,])))
     }
     result.splits = interactions_per_feature(x = x, y = Y, feat = colnames(x)[i], n.splits = n.splits, min.node.size = min.node.size,
-      optimizer = optimizer, objective.split = objective.split, objective.total = objective.total, 
-      improve.first.split = improve.first.split, improve.n.splits = improve.n.splits, ...)
+                                             optimizer = optimizer, objective.split = objective.split, objective.total = objective.total, 
+                                             improve.first.split = improve.first.split, improve.n.splits = improve.n.splits, ...)
     
     #if(i == 1 & is.null(result.splits)) next
     if (!is.null(result.splits)) {
