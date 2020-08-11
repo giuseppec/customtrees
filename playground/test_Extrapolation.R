@@ -31,7 +31,7 @@ X = dat[, setdiff(colnames(dat), "y")]
 mod = ranger(y ~ ., data = dat, num.trees = 500)
 pred = predict.function = function(model, newdata) predict(model, newdata)$predictions
 model = Predictor$new(mod, data = X, y = y, predict.function = pred)
-effect = FeatureEffects$new(model, method = "ice", grid.size = 20, features = "z")
+effect = FeatureEffect$new(model, method = "ice", grid.size = 20, feature = "z")
 # Get ICE values and arrange them in a horizontal matrix
 Y = spread(effect$results$z, .borders, .value)
 Y = Y[, setdiff(colnames(Y), c(".type", ".id", ".feature"))]
@@ -79,7 +79,28 @@ ia3 = Interaction$new(model, feature = "x5", grid.size = 20)
 ia4 = Interaction$new(model, feature = "x6", grid.size = 20)
 ia = Interaction$new(model, grid.size = 20)
 
+library(randomForest)
+mod = randomForest(y ~ ., data = dat, ntree = 500)
 
+fl <- flashlight(model = mod, label = "mod")
+fls <- multiflashlight(list(fl), data = dat, y = "y")
+light_interaction(fls, pairwise = TRUE)
+library(pre)
+pre_mod <- pre(y ~ ., data=dat)
+interact(pre_mod, c("z","d","x5","x6"))
+
+library(gbm)
+mod = gbm(y ~ ., data = dat,
+          distribution = "gaussian", n.trees = 100, shrinkage = 0.1,             
+          interaction.depth = 5, bag.fraction = 0.5, train.fraction = 0.5,  
+          n.minobsinnode = 10, cv.folds = 5, keep.data = TRUE, 
+          verbose = FALSE, n.cores = 1)
+interact.gbm(mod, dat, c("z","d"))
+interact.gbm(mod, dat, c("z","x5"))
+interact.gbm(mod, dat, c("z","x6"))
+interact.gbm(mod, dat, c("d","x5"))
+interact.gbm(mod, dat, c("d","x6"))
+interact.gbm(mod, dat, c("x6","x5"))
 
 
 #-------------------------------------------------------------------------------------------------------------

@@ -39,7 +39,7 @@ predict.mymodel = function(object, newdata) {
 
 test = predict(mymodel, dat)
 mod = Predictor$new(model = mymodel, data = X, predict.function = predict.mymodel)
-effect = FeatureEffects$new(predictor = mod, method = "ice", grid.size = 20, features = "z")
+effect = FeatureEffect$new(predictor = mod, method = "ice", grid.size = 20, feature = "z")
 effect$plot()
 effectd = FeatureEffects$new(predictor = mod, method = "ice", grid.size = 20, features = "x5")
 effectd$plot()
@@ -95,9 +95,11 @@ test = predict(mymodel, dat)
 mod = Predictor$new(model = mymodel, data = X, predict.function = predict.mymodel)
 
 # interactions # todo: Fehler bei "ind" nochmal testen
-potential.interactions = find_potential_interactions(X, mod, find_best_multiway_split, SS_fre_filtered, SS_fre, 1, min.node.size = 30, improve.first.split = 0, improve.n.splits = 0, x.all = X)
+potential.interactions = find_potential_interactions(X, mod, find_best_multiway_split, SS_fre_filtered, SS_fre, 3, min.node.size = 30, improve.first.split = 0.1, improve.n.splits = 0.1, 
+                                                     x.all = X)
+
 interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
-#find_true_interactions(X, mod, find_best_multiway_split2, n.splits = 1)
+find_true_interactions(X, mod, find_best_multiway_split, n.splits = 3, x.all = X)
 
 
 
