@@ -18,7 +18,7 @@ eps = rnorm(500, 0, 0.15)
 
 # noisy vars
 x5 = sample(c(0, 1), size = 500, replace = TRUE, prob = c(0.5, 0.5))
-x6 = rnorm(500, mean = 1, sd = 5)
+x6 = rnorm(500, mean = 0, sd = 1)
 
 
 y = z^0.5 * (1 - d) + (2^(1.5*z) - 1) * d + eps
@@ -126,7 +126,7 @@ interactions = potential.interactions[order(potential.interactions$improvement, 
 # Evtl. mit angepasster objective
 
 # compare with hstatistics
-ia = Interaction$new(model, feature = colnames(X)[2], grid.size = 20)
+ia = Interaction$new(model, feature = colnames(X)[4], grid.size = 20)
 
 
 

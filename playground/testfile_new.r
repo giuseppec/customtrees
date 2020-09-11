@@ -101,8 +101,8 @@ summary(unlist(result.total.L1$split.points[which(result.total.L1$feature == "V4
 
 
 # overview on split points for L2 - for interaction features V6 and V4
-summary(unlist(result.total.L2$split.points[which(result.total.L1$feature == "V6")]))
-summary(unlist(result.total.L2$split.points[which(result.total.L1$feature == "V4")]))
+summary(unlist(result.total.L2$split.points[which(result.total.L2$feature == "V6")]))
+summary(unlist(result.total.L2$split.points[which(result.total.L2$feature == "V4")]))
 
 
 
