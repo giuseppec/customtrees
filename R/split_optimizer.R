@@ -54,7 +54,8 @@ find_best_multiway_split_mals = function(xval, y, n.splits = 1, min.node.size = 
     perform_split(split.points = par, xval = xval, y = y, min.node.size = min.node.size,
       objective = objective, ...)
   best = Rmalschains::malschains(.perform_split, lower = lower, upper = upper,
-    initialpop = pop, verbosity = 0, control = control, maxEvals = maxEvals) #   control = malschains.control(istep = 300, ls = "sw"),
+    initialpop = pop, verbosity = 0, control = control, maxEvals = maxEvals) 
+  #   control = malschains.control(istep = 300, ls = "sw"),
 
   return(list(split.points = sort.int(best$sol), objective.value = best$fitness))
 }

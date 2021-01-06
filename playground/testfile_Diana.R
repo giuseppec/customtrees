@@ -1,4 +1,5 @@
 library(devtools)
+library(BBmisc)
 load_all()
 
 source("playground/helper_functions.r")
@@ -54,14 +55,14 @@ for (j in 1:nrow(Y)) {
 # artificially create randomly for a couple of ice curves outliers (play here a bit around to show the
 # difference between L1 and L2 loss)
 Y[sample(1:100, 4),] = c(10*cos(rnorm(20, 1, 5)) - 3*as.numeric(colnames(Y)), 7*cos(rnorm(20, 2, 4)) - (as.numeric(colnames(Y)))^2,
-                         5*cos(rnorm(20, 3, 3)) - 20*as.numeric(colnames(Y)), 20*sin(rnorm(20, 0, 2)) - 8*as.numeric(colnames(Y)))
+  5*cos(rnorm(20, 3, 3)) - 20*as.numeric(colnames(Y)), 20*sin(rnorm(20, 0, 2)) - 8*as.numeric(colnames(Y)))
 
 # here: binary split, you can also try more splits, but I think for the showcase binary would be enough
 # here objective currently set to SS_fre which is equivalent to L1 loss, 
 # change it to SS_fre_L2 to calculate the same with L2 loss
 res = split_parent_node(Y = Y, X = X[,-which(colnames(X) == "V3")], 
-                        optimizer = find_best_multiway_split, n.splits = 1, objective = SS_fre, min.node.size = 10,
-                        feat = "V3", x.all = X)
+  optimizer = find_best_multiway_split, n.splits = 1, objective = SS_fre, min.node.size = 10,
+  feat = "V3", x.all = X)
 
 # plot ice curves
 ice = get_ice_curves(X = X, Y = Y, result = res, extrapol = FALSE)
@@ -90,8 +91,8 @@ ggplot(plot.data, aes(x = .borders, y = .value)) +
 
 rm(res)
 potential.interactions = find_potential_interactions(x = X, model = model, optimizer = find_best_multiway_split, objective.split = SS_fre, objective.total = SS_fre, 
-                                                     n.splits = 5, min.node.size = 10, improve.first.split = 0.1, improve.n.splits = 0.1, 
-                                                     x.all = X)
+  n.splits = 5, min.node.size = 10, improve.first.split = 0.1, improve.n.splits = 0.1, 
+  x.all = X)
 interactions = potential.interactions[order(potential.interactions$improvement, decreasing = TRUE),]
 
 
