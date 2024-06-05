@@ -64,7 +64,7 @@ library(tidyverse)
 set.seed(1)
 
 # Simulate Data
-n = 500
+n = 50000
 x1 = round(runif(n, -1, 1), 1)
 x2 = round(runif(n, -1, 1), 3)
 x3 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
