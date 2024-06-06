@@ -3,8 +3,8 @@
 #
 # x: [vector] feature to search split
 # y: [matrix] n x g matrix containing n ice curves computed on g grid points
-# splits: vector of potential split.points to split x, default are 1% quantiles
-search_split = function(x, y, splits = quantile(x, seq(0, 1, by = 1/100))) {
+# splits: vector of potential split.points to split x, default are unique x values
+search_split = function(x, y, splits = unique(x)) { # quantile(x, seq(0, 1, by = 1/100))
   checkmate::assert_vector(x)
   checkmate::assert_matrix(y)
   
@@ -64,7 +64,7 @@ library(tidyverse)
 set.seed(1)
 
 # Simulate Data
-n = 50000
+n = 5000
 x1 = round(runif(n, -1, 1), 1)
 x2 = round(runif(n, -1, 1), 3)
 x3 = sample(c(0, 1), size = n, replace = TRUE, prob = c(0.5, 0.5))
@@ -119,9 +119,12 @@ ggplot(eff, aes(x = x2, y = .value)) +
   geom_line(aes(group = .id)) + facet_grid(~ .split)
 
 
+library(Rcpp)
+sourceCpp("playground/repid.cpp")
 
+best_split_cpp(X, Y)
 
-
+microbenchmark::microbenchmark(best_split_cpp(X, Y), best_split(X, Y))
 
 
 # point-wise L2 distance
