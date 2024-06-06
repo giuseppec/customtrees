@@ -120,11 +120,11 @@ ggplot(eff, aes(x = x2, y = .value)) +
 
 
 library(Rcpp)
-sourceCpp("playground/repid.cpp")
+sourceCpp("repid.cpp")
 
 best_split_cpp(X, Y)
 
-microbenchmark::microbenchmark(best_split_cpp(X, Y), best_split(X, Y))
+microbenchmark::microbenchmark(best_split_cpp(X, Y), best_split(X, Y), times = 10)
 
 
 # point-wise L2 distance

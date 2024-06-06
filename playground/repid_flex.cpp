@@ -19,6 +19,26 @@ NumericVector unique_cpp(NumericVector x) {
   return wrap(unique_vals);
 }
 
+// Function to find the best split
+List find_best_split(NumericVector x, double split_point) {
+  double right = R_PosInf;
+  double left = R_NegInf;
+  
+  for (int i = 0; i < x.size(); ++i) {
+    if (x[i] > split_point && x[i] < right) {
+      right = x[i];
+    }
+    if (x[i] <= split_point && x[i] > left) {
+      left = x[i];
+    }
+  }
+  
+  return List::create(
+    Named("right") = right,
+    Named("left") = left
+  );
+}
+
 // [[Rcpp::export]]
 NumericVector search_split_cpp(NumericVector x, NumericMatrix y, NumericVector splits) {
   int N = y.nrow();
@@ -55,12 +75,8 @@ NumericVector search_split_cpp(NumericVector x, NumericMatrix y, NumericVector s
   for (int k = 0; k < num_splits; ++k) {
     double split = splits[k];
     int N_L = 0;
-    for (int i = 0; i < N; ++i) {
-      if (x_sorted[i] <= split) {
-        N_L++;
-      } else {
-        break;
-      }
+    while (N_L < N && x_sorted[N_L] <= split) {
+      N_L++;
     }
     if (N_L == 0 || N_L == N) {
       continue; // Invalid split
@@ -84,27 +100,7 @@ NumericVector search_split_cpp(NumericVector x, NumericMatrix y, NumericVector s
 }
 
 // [[Rcpp::export]]
-List find_best_split(NumericVector x, double split_point) {
-  double right = R_PosInf;
-  double left = R_NegInf;
-  
-  for (int i = 0; i < x.size(); ++i) {
-    if (x[i] > split_point && x[i] <= right) {
-      right = x[i];
-    }
-    if (x[i] <= split_point && x[i] > left) {
-      left = x[i];
-    }
-  }
-  
-  return List::create(
-    Named("right") = right,
-    Named("left") = left
-  );
-}
-
-// [[Rcpp::export]]
-DataFrame best_split_cpp(DataFrame X, NumericMatrix y) { //, NumericMatrix splits) {
+DataFrame best_split_cpp(DataFrame X, NumericMatrix y, Nullable<List> splits_list = R_NilValue) {
   int n_features = X.size();
   CharacterVector feature_names = X.names();
   
@@ -115,7 +111,15 @@ DataFrame best_split_cpp(DataFrame X, NumericMatrix y) { //, NumericMatrix split
   
   for (int i = 0; i < n_features; ++i) {
     NumericVector x = X[i];
-    NumericVector split_vector = unique_cpp(x); //splits(i, _);
+    
+    NumericVector split_vector;
+    if (splits_list.isNotNull()) {
+      List splits = as<List>(splits_list);
+      split_vector = splits[i];
+    } else {
+      split_vector = unique_cpp(x);
+    }
+    
     NumericVector objectives = search_split_cpp(x, y, split_vector);
     int best = which_min(objectives);
     double best_split_point = split_vector[best];
@@ -125,7 +129,6 @@ DataFrame best_split_cpp(DataFrame X, NumericMatrix y) { //, NumericMatrix split
     double left = best_split_info["left"];
     split_points[i] = (left + right) / 2;
     
-    //split_points[i] = best_split_point;
     objective_values[i] = objectives[best];
     features[i] = feature_names[i];
   }
