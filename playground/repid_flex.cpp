@@ -20,7 +20,7 @@ NumericVector unique_cpp(NumericVector x) {
 }
 
 // Function to find the best split
-List find_best_split(NumericVector x, double split_point) {
+double find_best_split(NumericVector x, double split_point) {
   double right = R_PosInf;
   double left = R_NegInf;
   
@@ -33,10 +33,7 @@ List find_best_split(NumericVector x, double split_point) {
     }
   }
   
-  return List::create(
-    Named("right") = right,
-    Named("left") = left
-  );
+  return (left + right) / 2;
 }
 
 // [[Rcpp::export]]
@@ -124,10 +121,7 @@ DataFrame best_split_cpp(DataFrame X, NumericMatrix y, Nullable<List> splits_lis
     int best = which_min(objectives);
     double best_split_point = split_vector[best];
     
-    List best_split_info = find_best_split(x, best_split_point);
-    double right = best_split_info["right"];
-    double left = best_split_info["left"];
-    split_points[i] = (left + right) / 2;
+    split_points[i] = find_best_split(x, best_split_point);
     
     objective_values[i] = objectives[best];
     features[i] = feature_names[i];
